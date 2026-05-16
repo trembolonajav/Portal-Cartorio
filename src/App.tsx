@@ -350,7 +350,7 @@ function Dashboard({ onOpenTicket }: { onOpenTicket: (numero: number) => void })
   return (
     <div className="space-y-7">
       <p className="text-lg text-slate-600">Resumo operacional com dados vindos do backend Java.</p>
-      {isStaff && <StatsRow stats={stats} tickets={tickets} />}
+      {isStaff ? <StatsRow stats={stats} tickets={tickets} /> : <EmployeeStatsRow tickets={visibleTickets} />}
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 className="font-semibold">Chamados atrasados</h2>
@@ -733,6 +733,8 @@ function TicketDetail({
   const [publicMessage, setPublicMessage] = useState("");
   const [internalMessage, setInternalMessage] = useState("");
   const isStaff = canOperate(user);
+  const isResolved = ticket.status === "resolvido";
+  const canSendPublicComment = isStaff || !isResolved;
 
   const loadComments = useCallback(async () => {
     setComments(await api<TicketComment[]>(`/tickets/${ticket.numero}/comments`));
@@ -747,7 +749,7 @@ function TicketDetail({
   ) {
     await api<Ticket>(`/tickets/${ticket.numero}`, {
       method: "PATCH",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, autorId: user.id }),
     });
     await onChanged();
   }
@@ -763,6 +765,7 @@ function TicketDetail({
   }
 
   async function sendComment(interno: boolean) {
+    if (!isStaff && isResolved) return;
     const text = interno ? internalMessage : publicMessage;
     if (!text.trim()) return;
     await api<TicketComment>(`/tickets/${ticket.numero}/comments`, {
@@ -860,16 +863,23 @@ function TicketDetail({
           <div className="grid gap-5 lg:grid-cols-2">
             <DetailCard title="Resposta ao solicitante">
               <CommentList comments={publicComments} />
+              {!canSendPublicComment && (
+                <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                  Chamado fechado. As respostas ficam bloqueadas após a resolução.
+                </p>
+              )}
               <div className="mt-4 space-y-3">
                 <textarea
                   value={publicMessage}
                   onChange={(event) => setPublicMessage(event.target.value)}
+                  disabled={!canSendPublicComment}
                   className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449]"
                   placeholder="Mensagem visível ao usuário"
                 />
                 <button
                   onClick={() => sendComment(false)}
-                  className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white"
+                  disabled={!canSendPublicComment}
+                  className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Enviar resposta
                 </button>
@@ -1595,6 +1605,22 @@ function StatsRow({ stats, tickets }: { stats: DashboardStats | null; tickets: T
         icon={Clock}
         tone="violet"
       />
+    </div>
+  );
+}
+
+function EmployeeStatsRow({ tickets }: { tickets: Ticket[] }) {
+  const aberto = tickets.filter((ticket) => ticket.status === "aberto").length;
+  const emAndamento = tickets.filter((ticket) => ticket.status === "em_andamento" || ticket.status === "em_analise" || ticket.status === "aguardando_solicitante").length;
+  const resolvido = tickets.filter((ticket) => ticket.status === "resolvido").length;
+  const atrasado = tickets.filter(isAtrasado).length;
+
+  return (
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <StatCard label="Abertos" value={aberto} suffix="chamados" icon={FileText} tone="blue" />
+      <StatCard label="Em andamento" value={emAndamento} suffix="chamados" icon={TicketIcon} tone="amber" />
+      <StatCard label="Resolvidos" value={resolvido} suffix="chamados" icon={CheckCircle2} tone="emerald" />
+      <StatCard label="Atrasados" value={atrasado} suffix="chamados" icon={Clock} tone="red" />
     </div>
   );
 }

@@ -126,7 +126,14 @@ public class ApiController {
   @PatchMapping("/tickets/{numero}")
   public TicketDto updateTicket(@PathVariable int numero, @RequestBody TicketPatch patch) {
     Ticket ticket = findTicket(numero);
-    if (patch.status() != null) ticket.setStatus(patch.status());
+    UserAccount autor = patch.autorId() == null ? null : users.findById(patch.autorId()).orElse(null);
+    if (patch.status() != null) {
+      ticket.setStatus(patch.status());
+      if (patch.status() == TicketStatus.resolvido && ticket.getAtribuidoA() == null && autor != null) {
+        ticket.setAtribuidoA(autor);
+        comments.save(new TicketComment(UUID.randomUUID(), ticket, autor, autor.getNomeCompleto() + " resolveu o chamado", true, OffsetDateTime.now()));
+      }
+    }
     if (patch.prioridade() != null) ticket.setPrioridade(patch.prioridade());
     if (patch.atribuidoAId() != null) {
       UserAccount responsavel = users.findById(patch.atribuidoAId())

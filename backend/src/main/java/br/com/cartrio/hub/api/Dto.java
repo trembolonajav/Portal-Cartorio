@@ -26,7 +26,7 @@ public class Dto {
   public record SetorDto(UUID id, String nome, boolean ativo) {}
   public record CategoriaDto(UUID id, String nome, boolean ativo) {}
   public record TicketCreate(String titulo, String descricao, TicketPriority prioridade, UUID categoriaId, UUID setorId, UUID criadoPorId, String anexos, String equipamentoRelacionado) {}
-  public record TicketPatch(TicketStatus status, TicketPriority prioridade, UUID atribuidoAId) {}
+  public record TicketPatch(TicketStatus status, TicketPriority prioridade, UUID atribuidoAId, UUID autorId) {}
   public record CommentCreate(String mensagem, boolean interno, UUID autorId) {}
   public record DashboardStats(int aberto, int emAndamento, int aguardando, int atrasados, int resolvidosMes, int semResponsavel) {}
 

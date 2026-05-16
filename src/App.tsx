@@ -369,7 +369,7 @@ function Dashboard({ onOpenTicket }: { onOpenTicket: (numero: number) => void })
   return (
     <div className="space-y-7">
       <p className="text-lg text-slate-600">Resumo operacional com dados vindos do backend Java.</p>
-      {isStaff ? <StatsRow stats={stats} tickets={tickets} /> : <EmployeeStatsRow tickets={visibleTickets} />}
+      <StatsRow stats={stats} tickets={tickets} />
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 className="font-semibold">Chamados atrasados</h2>
@@ -395,6 +395,11 @@ function Dashboard({ onOpenTicket }: { onOpenTicket: (numero: number) => void })
                 <StatusBadge status={ticket.status} />
               </button>
             ))}
+          {tickets.filter(isAtrasado).length === 0 && (
+            <div className="px-5 py-10 text-center text-sm text-slate-500">
+              Nenhum chamado atrasado no momento.
+            </div>
+          )}
         </div>
       </section>
     </div>

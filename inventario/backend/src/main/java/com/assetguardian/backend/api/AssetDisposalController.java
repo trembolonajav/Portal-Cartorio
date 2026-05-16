@@ -53,6 +53,13 @@ public class AssetDisposalController {
             .body(service.termHtml(id));
     }
 
+    @GetMapping("/{id}/signature-sheet")
+    public ResponseEntity<String> signatureSheet(@PathVariable Long id) {
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
+            .body(service.signatureSheetHtml(id));
+    }
+
     @PostMapping(path = "/{id}/upload-signed-term", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AssetDisposalResponse uploadSignedTerm(
         @PathVariable Long id,

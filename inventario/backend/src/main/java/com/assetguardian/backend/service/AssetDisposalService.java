@@ -108,71 +108,13 @@ public class AssetDisposalService {
     public String termHtml(Long id) {
         AssetDisposal disposal = requireDisposal(id);
         List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id);
-        String rows = items.stream()
-            .map(item -> "<tr><td>" + html(item.getAssetCodeSnapshot()) + "</td><td>" + html(item.getCategorySnapshot()) + "</td><td>" + html(item.getDescriptionSnapshot()) + "</td><td>" + html(item.getManufacturerSnapshot()) + "</td><td>" + html(item.getModelSnapshot()) + "</td><td>" + html(item.getSerialNumberSnapshot()) + "</td><td>" + html(item.getStationSnapshot()) + "</td><td>" + html(item.getResponsibleSnapshot()) + "</td></tr>")
-            .reduce("", String::concat);
-        String date = DateTimeFormatter.ofPattern("dd/MM/yyyy").format(disposal.getAuthorizationDate() == null ? LocalDate.now() : disposal.getAuthorizationDate());
-        return """
-            <!doctype html>
-            <html lang="pt-BR">
-            <head>
-              <meta charset="utf-8" />
-              <title>Termo de Baixa Patrimonial</title>
-              <style>
-                body { font-family: Arial, sans-serif; color: #061a38; margin: 40px; }
-                .header { border-bottom: 4px solid #d5a84f; padding-bottom: 18px; margin-bottom: 28px; }
-                .brand { font-size: 20px; font-weight: 700; }
-                .subtitle { color: #6b7280; font-size: 13px; margin-top: 4px; }
-                h1 { font-size: 24px; margin: 22px 0 8px; }
-                .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 30px; margin: 22px 0; font-size: 13px; }
-                .box { border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; margin: 18px 0; }
-                table { width: 100%%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
-                th { background: #062449; color: white; text-align: left; padding: 8px; }
-                td { border: 1px solid #d8dee8; padding: 7px; vertical-align: top; }
-                .signatures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; margin-top: 70px; }
-                .signature { border-top: 1px solid #061a38; text-align: center; padding-top: 8px; font-size: 12px; }
-                @media print { body { margin: 24px; } button { display: none; } }
-              </style>
-            </head>
-            <body>
-              <button onclick="window.print()">Imprimir / salvar PDF</button>
-              <section class="header">
-                <div class="brand">CARTORIO INDIO ARTIAGA</div>
-                <div class="subtitle">4o Tabelionato de Notas</div>
-              </section>
-              <h1>Termo de Baixa Patrimonial</h1>
-              <div class="meta">
-                <div><strong>Numero:</strong> %s</div>
-                <div><strong>Data:</strong> %s</div>
-                <div><strong>Motivo:</strong> %s</div>
-                <div><strong>Destino:</strong> %s</div>
-                <div><strong>Solicitante:</strong> %s</div>
-                <div><strong>Autorizador:</strong> %s</div>
-              </div>
-              <div class="box"><strong>Justificativa</strong><p>%s</p></div>
-              <div class="box"><strong>Observacoes</strong><p>%s</p></div>
-              <h2>Patrimonios baixados</h2>
-              <table>
-                <thead><tr><th>Codigo</th><th>Categoria</th><th>Descricao</th><th>Fabricante</th><th>Modelo</th><th>Serie</th><th>Local</th><th>Responsavel</th></tr></thead>
-                <tbody>%s</tbody>
-              </table>
-              <div class="signatures">
-                <div class="signature">Solicitante</div>
-                <div class="signature">Responsavel pela autorizacao</div>
-              </div>
-            </body>
-            </html>
-            """.formatted(
-                html(disposal.getNumber()),
-                html(date),
-                html(disposal.getReason().name()),
-                html(disposal.getDestination()),
-                html(disposal.getRequestedBy()),
-                html(disposal.getAuthorizedByName()),
-                html(disposal.getJustification()),
-                html(disposal.getNotes()),
-                rows
-            );
+        return fullTermHtml(disposal, items);
+    }
+
+    public String signatureSheetHtml(Long id) {
+        AssetDisposal disposal = requireDisposal(id);
+        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id);
+        return signatureSheetHtml(disposal, items);
     }
 
     public AssetDisposalResponse uploadSignedTerm(Long id, MultipartFile file, String username) {
@@ -247,6 +189,180 @@ public class AssetDisposalService {
         disposal.setCancelReason(request.reason().trim());
         event(disposal, "CANCELLED", "Baixa cancelada: " + request.reason().trim(), request.username());
         return toResponse(disposal, true);
+    }
+
+    private String fullTermHtml(AssetDisposal disposal, List<AssetDisposalItem> items) {
+        String date = formatDate(disposal.getAuthorizationDate());
+        StringBuilder html = new StringBuilder();
+        html.append(documentStart("Termo de Baixa Patrimonial"));
+        html.append("""
+              <section class="cover">
+                <div class="model-label">DOCUMENTO INTERNO</div>
+                <h1>Termo de Baixa Patrimonial</h1>
+                <p class="cover-subtitle">Controle interno, rastreabilidade e formalizacao da retirada de bens do inventario ativo.</p>
+                <div class="cover-grid">
+            """);
+        meta(html, "No da baixa", disposal.getNumber());
+        meta(html, "Data de emissao", date);
+        meta(html, "Unidade", "Cartorio Indio Artiaga - 4o Tabelionato de Notas");
+        meta(html, "Quantidade de bens", String.valueOf(items.size()));
+        html.append("""
+                </div>
+              </section>
+
+              <section class="page">
+                <h2>1. Resumo executivo da baixa</h2>
+                <div class="summary-grid">
+            """);
+        stat(html, "Categoria predominante", dominantCategory(items));
+        stat(html, "Quantidade", String.valueOf(items.size()));
+        stat(html, "Motivo", reasonLabel(disposal));
+        stat(html, "Destino", disposal.getDestination());
+        html.append("""
+                </div>
+                <table class="info-table">
+            """);
+        row(html, "Numero do processo/termo", disposal.getNumber());
+        row(html, "Tipo de baixa", items.size() > 1 ? "Baixa patrimonial em lote" : "Baixa patrimonial individual");
+        row(html, "Motivo principal", reasonLabel(disposal));
+        row(html, "Destinacao definida", disposal.getDestination());
+        row(html, "Status sugerido no inventario", "Baixado - manter historico e vinculo com este termo");
+        row(html, "Responsavel pela conferencia", safe(disposal.getRequestedBy()));
+        row(html, "Responsavel pela aprovacao", disposal.getAuthorizedByName());
+        html.append("""
+                </table>
+                <p class="muted">Dados patrimoniais, localizacao e responsavel foram preenchidos automaticamente pelo inventario no momento da baixa, preservando snapshot para auditoria.</p>
+              </section>
+
+              <section class="page">
+                <h2>2. Termo de baixa patrimonial</h2>
+                <p>Pelo presente termo, fica formalizada a baixa patrimonial dos bens relacionados no Anexo I, vinculados ao processo interno indicado neste documento.</p>
+                <p>A baixa ocorre pelo motivo <strong>""").append(html(reasonLabel(disposal))).append("</strong>, com destinacao definida como <strong>").append(html(disposal.getDestination())).append("""
+                </strong>. O registro patrimonial nao sera excluido; o sistema mantera historico, movimentacao, usuario responsavel, data/hora da acao e documentos vinculados.</p>
+                <h3>2.1. Justificativa tecnica e administrativa</h3>
+                <div class="box"><p>""").append(html(disposal.getJustification())).append("""
+                </p></div>
+                <h3>2.2. Observacoes internas</h3>
+                <div class="box"><p>""").append(html(disposal.getNotes())).append("""
+                </p></div>
+              </section>
+
+              <section class="page">
+                <h2>3. Seguranca da informacao e destinacao</h2>
+                <table class="info-table">
+            """);
+        row(html, "Verificacao de midia", "Conferir se o bem possui HD, SSD, certificado, documento ou memoria interna antes da destinacao.");
+        row(html, "Aplicacao para perifericos", "Quando o bem nao possui armazenamento interno, registrar como nao aplicavel.");
+        row(html, "Comprovante de destinacao", "Anexar quando houver coleta, reciclagem, doacao, venda ou entrega a terceiro.");
+        row(html, "Status apos conclusao", "Baixado, com historico e documento vinculados.");
+        html.append("""
+                </table>
+              </section>
+
+              <section class="page">
+                <h2>4. Anexo I - Relacao de bens para baixa</h2>
+                <p class="muted">Tabela preenchida automaticamente com os patrimonios selecionados no inventario. Conferir fisicamente etiquetas e numeros patrimoniais antes da assinatura.</p>
+                <table>
+                  <thead><tr><th>No</th><th>Patrimonio</th><th>Categoria</th><th>Descricao</th><th>Marca</th><th>Modelo</th><th>Serie</th><th>Local</th><th>Responsavel</th><th>Destino</th></tr></thead>
+                  <tbody>
+            """);
+        for (int index = 0; index < items.size(); index++) {
+            AssetDisposalItem item = items.get(index);
+            html.append("<tr><td>").append(index + 1).append("</td><td>").append(html(item.getAssetCodeSnapshot()))
+                .append("</td><td>").append(html(item.getCategorySnapshot()))
+                .append("</td><td>").append(html(item.getDescriptionSnapshot()))
+                .append("</td><td>").append(html(item.getManufacturerSnapshot()))
+                .append("</td><td>").append(html(item.getModelSnapshot()))
+                .append("</td><td>").append(html(item.getSerialNumberSnapshot()))
+                .append("</td><td>").append(html(item.getStationSnapshot()))
+                .append("</td><td>").append(html(item.getResponsibleSnapshot()))
+                .append("</td><td>").append(html(disposal.getDestination()))
+                .append("</td></tr>");
+        }
+        html.append("""
+                  </tbody>
+                </table>
+              </section>
+
+              <section class="page">
+                <h2>5. Registro automatico do sistema</h2>
+                <table class="info-table">
+            """);
+        row(html, "ID do processo", disposal.getNumber());
+        row(html, "Data/hora de geracao", formatDateTime(disposal.getTermGeneratedAt()));
+        row(html, "Usuario emissor", safe(disposal.getRequestedBy()));
+        row(html, "Origem dos dados", "Cadastro do inventario patrimonial");
+        row(html, "Acao automatica", "Vincular termo completo, folha assinada e historico aos patrimonios baixados.");
+        html.append("""
+                </table>
+              </section>
+
+              <section class="page">
+                <h2>6. Checklist de anexos</h2>
+                <table class="info-table">
+            """);
+        row(html, "Folha de assinatura", "Obrigatoria para finalizacao da baixa.");
+        row(html, "Foto geral dos bens", "Recomendada, podendo ser unica para o lote.");
+        row(html, "Foto das etiquetas patrimoniais", "Recomendada para comprovar conferencia fisica.");
+        row(html, "Comprovante de descarte/reciclagem", "Anexar quando houver entrega a terceiro ou coleta.");
+        row(html, "Parecer tecnico", "Recomendado para CPUs, notebooks, servidores e midias.");
+        html.append("""
+                </table>
+              </section>
+            """);
+        html.append(documentEnd());
+        return html.toString();
+    }
+
+    private String signatureSheetHtml(AssetDisposal disposal, List<AssetDisposalItem> items) {
+        StringBuilder html = new StringBuilder();
+        html.append(documentStart("Folha de Assinatura - Baixa Patrimonial"));
+        html.append("""
+              <section class="signature-page">
+                <div class="model-label">FOLHA PARA IMPRESSAO E ASSINATURA</div>
+                <h1>Folha de Assinatura da Baixa Patrimonial</h1>
+                <p class="cover-subtitle">Esta folha resume e formaliza a aprovacao do termo completo mantido digitalmente no sistema.</p>
+                <div class="cover-grid compact">
+            """);
+        meta(html, "No da baixa", disposal.getNumber());
+        meta(html, "Data", formatDate(disposal.getAuthorizationDate()));
+        meta(html, "Motivo", reasonLabel(disposal));
+        meta(html, "Destino", disposal.getDestination());
+        meta(html, "Quantidade de bens", String.valueOf(items.size()));
+        meta(html, "Autorizador", disposal.getAuthorizedByName());
+        html.append("""
+                </div>
+                <div class="box declaration">
+                  <p>Declaro ciencia e aprovacao da baixa patrimonial indicada acima, referente aos bens relacionados no termo completo gerado pelo Sistema de Inventario Patrimonial.</p>
+                  <p>O termo completo permanece armazenado digitalmente no sistema, com relacao integral dos patrimonios, snapshots dos dados cadastrais, justificativa, historico e documentos anexos.</p>
+                </div>
+                <h2>Resumo dos patrimonios</h2>
+                <table>
+                  <thead><tr><th>No</th><th>Patrimonio</th><th>Categoria</th><th>Descricao</th><th>Local</th></tr></thead>
+                  <tbody>
+            """);
+        for (int index = 0; index < items.size(); index++) {
+            AssetDisposalItem item = items.get(index);
+            html.append("<tr><td>").append(index + 1).append("</td><td>").append(html(item.getAssetCodeSnapshot()))
+                .append("</td><td>").append(html(item.getCategorySnapshot()))
+                .append("</td><td>").append(html(item.getDescriptionSnapshot()))
+                .append("</td><td>").append(html(item.getStationSnapshot()))
+                .append("</td></tr>");
+        }
+        html.append("""
+                  </tbody>
+                </table>
+                <p class="muted">Caso a lista seja extensa, esta folha assina e referencia o termo completo digital da baixa, evitando impressao desnecessaria de todas as paginas.</p>
+                <div class="signatures four">
+                  <div class="signature">Responsavel pela conferencia<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                  <div class="signature">Responsavel de TI / Inventario<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                  <div class="signature">Gestor administrativo / Autorizador<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                  <div class="signature">Tabeliao/Substituto, se aplicavel<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                </div>
+              </section>
+            """);
+        html.append(documentEnd());
+        return html.toString();
     }
 
     private void addSnapshot(AssetDisposal disposal, Asset asset) {
@@ -342,6 +458,121 @@ public class AssetDisposalService {
         event.setDescription(description);
         event.setUsername(blankToNull(username));
         eventRepository.save(event);
+    }
+
+    private String documentStart(String title) {
+        return """
+            <!doctype html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="utf-8" />
+              <title>""" + html(title) + """
+              </title>
+              <style>
+                * { box-sizing: border-box; }
+                body { font-family: Arial, sans-serif; color: #061a38; margin: 0; background: #f3f6fa; }
+                button { position: fixed; right: 24px; top: 18px; z-index: 10; border: 0; border-radius: 6px; background: #062449; color: white; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+                .cover, .page, .signature-page { width: 210mm; min-height: 297mm; margin: 0 auto 16px; background: white; padding: 28mm 20mm; box-shadow: 0 12px 30px rgba(15, 23, 42, .12); page-break-after: always; }
+                .cover { display: flex; flex-direction: column; justify-content: center; border-top: 12px solid #062449; border-bottom: 12px solid #d5a84f; }
+                .model-label { color: #d5a84f; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
+                h1 { font-size: 34px; line-height: 1.1; margin: 0 0 12px; color: #061a38; }
+                h2 { font-size: 21px; margin: 0 0 16px; color: #061a38; }
+                h3 { font-size: 15px; margin: 18px 0 8px; color: #061a38; }
+                p { font-size: 13px; line-height: 1.58; }
+                .cover-subtitle { color: #5f6b7a; font-size: 15px; max-width: 680px; }
+                .cover-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 28px; }
+                .cover-grid.compact { margin-top: 18px; }
+                .meta-card, .stat { border: 1px solid #d8dee8; border-radius: 8px; padding: 12px; background: #fbfcfe; }
+                .meta-label, .stat-label { font-size: 10px; color: #7a8797; text-transform: uppercase; letter-spacing: .08em; }
+                .meta-value, .stat-value { margin-top: 5px; font-size: 14px; font-weight: 700; }
+                .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+                .box { border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; margin: 12px 0; background: #fbfcfe; }
+                .declaration { border-left: 4px solid #d5a84f; }
+                .muted { color: #657286; font-size: 12px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
+                th { background: #062449; color: white; text-align: left; padding: 8px; }
+                td { border: 1px solid #d8dee8; padding: 7px; vertical-align: top; }
+                .info-table th { width: 32%; background: #f2f5f9; color: #061a38; }
+                .signatures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 38px; margin-top: 58px; }
+                .signatures.four { grid-template-columns: repeat(2, 1fr); gap: 48px 38px; }
+                .signature { border-top: 1px solid #061a38; padding-top: 8px; min-height: 90px; font-size: 12px; line-height: 1.8; }
+                @media print {
+                  body { background: white; }
+                  button { display: none; }
+                  .cover, .page, .signature-page { margin: 0; box-shadow: none; }
+                }
+              </style>
+            </head>
+            <body>
+              <button onclick="window.print()">Imprimir / salvar PDF</button>
+            """;
+    }
+
+    private String documentEnd() {
+        return """
+            </body>
+            </html>
+            """;
+    }
+
+    private void meta(StringBuilder builder, String label, String value) {
+        builder.append("<div class=\"meta-card\"><div class=\"meta-label\">")
+            .append(html(label))
+            .append("</div><div class=\"meta-value\">")
+            .append(html(value))
+            .append("</div></div>");
+    }
+
+    private void stat(StringBuilder builder, String label, String value) {
+        builder.append("<div class=\"stat\"><div class=\"stat-label\">")
+            .append(html(label))
+            .append("</div><div class=\"stat-value\">")
+            .append(html(value))
+            .append("</div></div>");
+    }
+
+    private void row(StringBuilder builder, String label, String value) {
+        builder.append("<tr><th>")
+            .append(html(label))
+            .append("</th><td>")
+            .append(html(value))
+            .append("</td></tr>");
+    }
+
+    private String dominantCategory(List<AssetDisposalItem> items) {
+        return items.stream()
+            .collect(java.util.stream.Collectors.groupingBy(AssetDisposalItem::getCategorySnapshot, java.util.stream.Collectors.counting()))
+            .entrySet()
+            .stream()
+            .max(java.util.Map.Entry.comparingByValue())
+            .map(java.util.Map.Entry::getKey)
+            .orElse("Nao informado");
+    }
+
+    private String reasonLabel(AssetDisposal disposal) {
+        return switch (disposal.getReason()) {
+            case OBSOLESCENCE -> "Obsolescencia";
+            case IRREPAIRABLE_DEFECT -> "Defeito sem reparo";
+            case PHYSICAL_DAMAGE -> "Dano fisico";
+            case LOSS -> "Extravio";
+            case REPLACEMENT -> "Substituicao";
+            case DONATION -> "Doacao";
+            case DISCARD -> "Descarte";
+            case SALE -> "Venda";
+            case OTHER -> "Outro";
+        };
+    }
+
+    private String formatDate(LocalDate value) {
+        return DateTimeFormatter.ofPattern("dd/MM/yyyy").format(value == null ? LocalDate.now() : value);
+    }
+
+    private String formatDateTime(LocalDateTime value) {
+        return value == null ? "-" : DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(value);
+    }
+
+    private String safe(String value) {
+        return value == null || value.isBlank() ? "-" : value;
     }
 
     private String nextNumber() {

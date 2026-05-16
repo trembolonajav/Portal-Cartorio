@@ -207,6 +207,7 @@ export const inventoryApi = {
   createDisposal: (body: { assetIds: number[]; reason: ApiDisposalReason; destination: string; justification: string; notes?: string; authorizedByName: string; authorizationDate?: string; requestedBy?: string }) => apiPost<ApiAssetDisposal>("/asset-disposals", body),
   generateDisposalTerm: (id: string, username?: string) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/generate-term${username ? `?username=${encodeURIComponent(username)}` : ""}`),
   disposalTermUrl: (id: string) => apiUrl(`/asset-disposals/${id}/term`),
+  disposalSignatureSheetUrl: (id: string) => apiUrl(`/asset-disposals/${id}/signature-sheet`),
   uploadSignedDisposalTerm: (id: string, file: File, username?: string) => {
     const form = new FormData();
     form.append("file", file);

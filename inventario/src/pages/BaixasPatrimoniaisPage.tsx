@@ -145,18 +145,21 @@ const BaixasPatrimoniaisPage = () => {
     const updated = await inventoryApi.generateDisposalTerm(String(selected.id), getCurrentUsername() || undefined);
     setSelected(updated);
     await loadDisposals();
-    await openTerm(updated.id);
+    await openSignatureSheet(updated.id);
   };
 
-  const openTerm = async (id: number) => {
+  const openHtmlDocument = async (documentUrl: string) => {
     const auth = getStoredAuth();
-    const response = await fetch(inventoryApi.disposalTermUrl(String(id)), {
+    const response = await fetch(documentUrl, {
       headers: auth?.token ? { Authorization: auth.token } : undefined,
     });
     const html = await response.text();
-    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
-    window.open(url, '_blank');
+    const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    window.open(blobUrl, '_blank');
   };
+
+  const openTerm = async (id: number) => openHtmlDocument(inventoryApi.disposalTermUrl(String(id)));
+  const openSignatureSheet = async (id: number) => openHtmlDocument(inventoryApi.disposalSignatureSheetUrl(String(id)));
 
   const uploadSigned = async (file: File | null) => {
     if (!selected || !file) return;
@@ -164,9 +167,9 @@ const BaixasPatrimoniaisPage = () => {
       const updated = await inventoryApi.uploadSignedDisposalTerm(String(selected.id), file, getCurrentUsername() || undefined);
       setSelected(updated);
       await loadDisposals();
-      toast.success('Termo assinado anexado');
+      toast.success('Folha assinada anexada');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao anexar termo');
+      toast.error(error instanceof Error ? error.message : 'Erro ao anexar folha assinada');
     }
   };
 
@@ -372,12 +375,13 @@ const BaixasPatrimoniaisPage = () => {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {selected.status === 'DRAFT' && <Button onClick={generateTerm}><FileDown className="h-4 w-4 mr-2" />Gerar termo</Button>}
-                {selected.termGeneratedAt && <Button variant="outline" onClick={() => openTerm(selected.id)}><FileText className="h-4 w-4 mr-2" />Abrir termo</Button>}
+                {selected.status === 'DRAFT' && <Button onClick={generateTerm}><FileDown className="h-4 w-4 mr-2" />Gerar termo e folha</Button>}
+                {selected.termGeneratedAt && <Button variant="outline" onClick={() => openTerm(selected.id)}><FileText className="h-4 w-4 mr-2" />Abrir termo completo</Button>}
+                {selected.termGeneratedAt && <Button variant="outline" onClick={() => openSignatureSheet(selected.id)}><FileDown className="h-4 w-4 mr-2" />Abrir folha de assinatura</Button>}
                 {selected.status === 'WAITING_SIGNATURE' && (
                   <Button variant="outline" asChild>
                     <label className="cursor-pointer">
-                      <Upload className="h-4 w-4 mr-2" />Anexar termo assinado
+                      <Upload className="h-4 w-4 mr-2" />Anexar folha assinada
                       <input type="file" className="hidden" accept="application/pdf,image/*" onChange={event => uploadSigned(event.target.files?.[0] || null)} />
                     </label>
                   </Button>

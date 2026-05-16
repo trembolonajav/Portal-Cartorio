@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-ssr
+backups
+backend/target
+preview.out.log
+preview.err.log

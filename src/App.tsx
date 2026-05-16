@@ -1,0 +1,1817 @@
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  FileText,
+  Grid2X2,
+  LayoutDashboard,
+  List,
+  Lock,
+  LogOut,
+  Menu,
+  MoreVertical,
+  Package,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldCheck,
+  TicketIcon,
+  User,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { toast, Toaster } from "sonner";
+
+import {
+  api,
+  isAtrasado,
+  PRIORITY_LABEL,
+  STATUS_LABEL,
+  type AuthUser,
+  type Categoria,
+  type DashboardStats,
+  type Department,
+  type Employee,
+  type AppRole,
+  type Setor,
+  type Ticket,
+  type TicketComment,
+  type TicketPriority,
+  type TicketStatus,
+} from "@/lib/api";
+
+type View = "dashboard" | "chamados" | "usuarios" | "setores" | "configuracoes";
+type TabKey = "todos" | "sem_responsavel" | "meus" | "atrasados" | "aguardando";
+
+const NAV_ITEMS: Array<{
+  key: View | "inventario";
+  label: string;
+  icon: LucideIcon;
+  placeholder?: boolean;
+  externalUrl?: string;
+}> = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "chamados", label: "Chamados", icon: TicketIcon },
+  { key: "inventario", label: "Inventário", icon: Package, externalUrl: "http://localhost:8082" },
+  { key: "usuarios", label: "Funcionarios", icon: Users },
+  { key: "setores", label: "Departamentos", icon: Grid2X2 },
+  { key: "configuracoes", label: "Configurações", icon: Settings },
+];
+
+const VIEW_TITLES: Record<View, string> = {
+  dashboard: "Dashboard",
+  chamados: "Gestão de Chamados",
+  usuarios: "Funcionarios",
+  setores: "Departamentos",
+  configuracoes: "Configurações",
+};
+
+const ROLE_LABEL: Record<AppRole, string> = {
+  admin: "Administrador",
+  operador: "Operador",
+  usuario: "Funcionario",
+};
+
+function canOperate(user: AuthUser) {
+  return user.roles.includes("admin") || user.roles.includes("operador");
+}
+
+function canAdmin(user: AuthUser) {
+  return user.roles.includes("admin");
+}
+
+export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const raw = localStorage.getItem("cart-rio-user");
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  });
+
+  function onLogin(nextUser: AuthUser) {
+    localStorage.setItem("cart-rio-user", JSON.stringify(nextUser));
+    setUser(nextUser);
+  }
+
+  function onLogout() {
+    localStorage.removeItem("cart-rio-user");
+    localStorage.removeItem("cart-rio-auth");
+    document.cookie = "cart_rio_auth=; Max-Age=0; path=/; SameSite=Lax";
+    setUser(null);
+  }
+
+  if (!user) return <LoginPage onLogin={onLogin} />;
+  return <Shell user={user} onLogout={onLogout} />;
+}
+
+function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("123456");
+  const [keepConnected, setKeepConnected] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const result = await api<{ user: AuthUser }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      });
+      const token = `Basic ${btoa(`${result.user.username}:${password}`)}`;
+      localStorage.setItem("cart-rio-auth", JSON.stringify({ username: result.user.username, token }));
+      document.cookie = `cart_rio_auth=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+      onLogin(result.user);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao entrar");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="grid min-h-screen bg-[#f7f5f2] text-[#071936] lg:grid-cols-[1fr_1.1fr]">
+      <section className="relative flex min-h-[44vh] overflow-hidden bg-[#062449] px-8 py-10 text-white lg:min-h-screen lg:px-20">
+        <div className="absolute inset-y-0 right-0 w-px bg-[#d8bd83]" />
+        <img
+          src="/favicon.png"
+          alt=""
+          className="pointer-events-none absolute -left-28 top-28 h-[620px] w-[620px] opacity-[0.08]"
+        />
+        <div className="relative m-auto w-full max-w-xl text-center">
+          <img
+            src="/favicon.png"
+            alt=""
+            className="mx-auto h-32 w-32 rounded-full object-cover lg:h-36 lg:w-36"
+          />
+          <h1 className="mt-8 text-4xl font-semibold tracking-wide text-white">
+            PORTAL ÍNDIO ARTIAGA
+          </h1>
+          <p className="mt-2 text-2xl text-[#d8bd83]">4º Tabelionato de Notas</p>
+          <div className="mx-auto my-12 h-px w-28 bg-[#d8bd83]" />
+          <h2
+            className="text-4xl font-medium text-[#d8bd83]"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
+            Central de Gestão Interna
+          </h2>
+          <p className="mx-auto mt-6 max-w-md text-xl leading-relaxed text-white/90">
+            Sistema interno para controle operacional, suporte técnico e gestão administrativa da
+            serventia.
+          </p>
+          <p className="mt-24 text-lg text-[#d8bd83]">Uso interno · Acesso restrito</p>
+        </div>
+      </section>
+
+      <section className="relative grid min-h-[56vh] place-items-center overflow-hidden px-6 py-12 lg:min-h-screen">
+        <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full border border-[#d8bd83]/50" />
+        <div className="pointer-events-none absolute -bottom-24 left-0 h-80 w-80 rounded-full border border-[#d8bd83]/40" />
+        <form
+          onSubmit={submit}
+          className="w-full max-w-[620px] rounded-2xl bg-white/95 p-10 shadow-[0_24px_70px_-34px_rgba(7,25,54,0.45)] lg:p-14"
+        >
+          <div className="text-center">
+            <h2 className="text-4xl font-medium text-[#071936]">Acessar o sistema</h2>
+            <p className="mt-4 text-lg text-slate-500">
+              Entre com suas credenciais para continuar.
+            </p>
+          </div>
+          <div className="mt-10 space-y-6">
+            <TextField
+              label="Usuário ou e-mail"
+              value={username}
+              onChange={setUsername}
+              placeholder="Digite seu usuário ou e-mail"
+              icon={User}
+            />
+            <TextField
+              label="Senha"
+              value={password}
+              onChange={setPassword}
+              placeholder="Digite sua senha"
+              icon={Lock}
+              type="password"
+            />
+            <label className="flex items-center gap-3 text-base text-[#071936]">
+              <input
+                type="checkbox"
+                checked={keepConnected}
+                onChange={(event) => setKeepConnected(event.target.checked)}
+                className="h-5 w-5 rounded border-slate-300"
+              />
+              Manter conectado
+            </label>
+            <button
+              className="h-14 w-full rounded-xl bg-[#062449] text-lg font-semibold text-white shadow-[0_14px_24px_-16px_rgba(6,36,73,0.8)] transition hover:bg-[#0a315f]"
+              disabled={loading}
+            >
+              {loading ? "Entrando..." : "Entrar"}
+            </button>
+          </div>
+          <div className="mt-10 border-t border-slate-200 pt-8 text-center">
+            <div className="mx-auto flex max-w-md items-start justify-center gap-3 text-left text-sm text-slate-500">
+              <ShieldCheck className="mt-1 h-6 w-6 shrink-0 text-[#b99b5f]" />
+              <p>Ambiente restrito a colaboradores autorizados do Portal Índio Artiaga.</p>
+            </div>
+            <p className="mt-6 text-sm text-slate-400">v1.0.0</p>
+          </div>
+        </form>
+      </section>
+      <Toaster richColors />
+    </main>
+  );
+}
+
+function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const [view, setView] = useState<View>("chamados");
+  const [selectedTicket, setSelectedTicket] = useState<number | null>(null);
+  const allowedNavItems = NAV_ITEMS.filter((item) => {
+    if (item.key === "dashboard" || item.key === "usuarios" || item.key === "setores" || item.key === "configuracoes") return canAdmin(user);
+    if (item.key === "inventario") return canOperate(user);
+    return true;
+  });
+
+  return (
+    <div className="flex min-h-screen bg-[#f7f9fc] text-[#071936]">
+      <aside className="hidden w-[260px] shrink-0 flex-col bg-[#062449] text-white md:flex">
+        <div className="px-4 py-6 text-center">
+          <img src="/favicon.png" alt="" className="mx-auto h-20 w-20 rounded-full object-cover" />
+          <p className="mt-4 text-base font-semibold tracking-wide">PORTAL ÍNDIO ARTIAGA</p>
+          <p className="mt-1 text-sm text-[#d8bd83]">4º Tabelionato de Notas</p>
+        </div>
+        <nav className="mt-6 flex-1 space-y-1 px-3">
+          {allowedNavItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => {
+                if (item.externalUrl) {
+                  window.location.href = item.externalUrl;
+                  return;
+                }
+                setView(item.key as View);
+              }}
+              className={`flex h-12 w-full items-center gap-3 rounded-lg px-4 text-left text-[15px] transition ${
+                view === item.key && !item.externalUrl
+                  ? "bg-white/10 text-[#f2cf74] shadow-[inset_3px_0_0_#e0b646]"
+                  : "text-white/90 hover:bg-white/8"
+              }`}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="space-y-4 px-5 py-6 text-sm text-white/80">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#f2cf74]" />
+            <span>Uso interno · Acesso restrito</span>
+          </div>
+          <p>© 2026 Portal Índio Artiaga</p>
+          <p>v1.0.0</p>
+        </div>
+      </aside>
+
+      <div className="min-w-0 flex-1">
+        <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/95 px-6 backdrop-blur">
+          <div className="flex items-center gap-5">
+            <button className="grid h-10 w-10 place-items-center rounded-lg hover:bg-slate-100">
+              <Menu className="h-5 w-5" />
+            </button>
+            <h1 className="text-3xl font-semibold tracking-[-0.01em]">{VIEW_TITLES[view]}</h1>
+          </div>
+          <div className="flex items-center gap-5">
+            <div className="relative hidden lg:block">
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+              <input
+                className="h-12 w-72 rounded-lg border border-slate-200 bg-white pl-12 pr-4 text-sm outline-none focus:border-[#062449]"
+                placeholder="Buscar chamado..."
+              />
+            </div>
+            <div className="relative">
+              <Bell className="h-6 w-6" />
+              <span className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-[#062449] text-[11px] font-bold text-white">
+                3
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-full bg-slate-100">
+                <User className="h-6 w-6" />
+              </div>
+              <div className="hidden leading-tight sm:block">
+                <p className="font-semibold">{user.nomeCompleto}</p>
+                <p className="text-sm text-slate-500">{ROLE_LABEL[user.roles[0] ?? "usuario"]}</p>
+              </div>
+              <ChevronDown className="h-4 w-4" />
+            </div>
+            <button
+              onClick={onLogout}
+              className="grid h-10 w-10 place-items-center rounded-lg hover:bg-slate-100"
+              title="Sair"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
+        </header>
+        <main className="p-7">
+          {view === "dashboard" && canAdmin(user) && (
+            <Dashboard
+              onOpenTicket={(numero) => {
+                setSelectedTicket(numero);
+                setView("chamados");
+              }}
+            />
+          )}
+          {view === "chamados" && (
+            <TicketsPage user={user} selected={selectedTicket} onSelect={setSelectedTicket} />
+          )}
+          {(view === "configuracoes" || view === "setores" || view === "usuarios") && canAdmin(user) && <ConfigPage view={view} />}
+        </main>
+      </div>
+      <Toaster richColors />
+    </div>
+  );
+}
+
+function Dashboard({ onOpenTicket }: { onOpenTicket: (numero: number) => void }) {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+
+  useEffect(() => {
+    Promise.all([api<Ticket[]>("/tickets"), api<DashboardStats>("/dashboard")])
+      .then(([ticketData, statData]) => {
+        setTickets(ticketData);
+        setStats(statData);
+      })
+      .catch((error) => toast.error(error.message));
+  }, []);
+
+  return (
+    <div className="space-y-7">
+      <p className="text-lg text-slate-600">Resumo operacional com dados vindos do backend Java.</p>
+      <StatsRow stats={stats} tickets={tickets} />
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h2 className="font-semibold">Chamados atrasados</h2>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {tickets
+            .filter(isAtrasado)
+            .slice(0, 6)
+            .map((ticket) => (
+              <button
+                key={ticket.id}
+                onClick={() => onOpenTicket(ticket.numero)}
+                className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-slate-50"
+              >
+                <div>
+                  <p className="font-semibold">
+                    #{ticket.numero} · {ticket.titulo}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {ticket.criadoPor.nomeCompleto} · {ticket.setor?.nome}
+                  </p>
+                </div>
+                <StatusBadge status={ticket.status} />
+              </button>
+            ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TicketsPage({
+  user,
+  selected,
+  onSelect,
+}: {
+  user: AuthUser;
+  selected: number | null;
+  onSelect: (numero: number | null) => void;
+}) {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<TicketStatus | "all">("all");
+  const [priority, setPriority] = useState<TicketPriority | "all">("all");
+  const [setorId, setSetorId] = useState("all");
+  const [responsavelId, setResponsavelId] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [tab, setTab] = useState<TabKey>("todos");
+  const [newTicketOpen, setNewTicketOpen] = useState(false);
+  const isStaff = canOperate(user);
+
+  async function load() {
+    const [ticketData, statData] = await Promise.all([
+      api<Ticket[]>("/tickets"),
+      api<DashboardStats>("/dashboard"),
+    ]);
+    setTickets(ticketData);
+    setStats(statData);
+  }
+
+  useEffect(() => {
+    load().catch((error) => toast.error(error.message));
+  }, []);
+
+  const setores = useMemo(
+    () =>
+      uniqueBy(
+        tickets.flatMap((ticket) => (ticket.setor ? [ticket.setor] : [])),
+        "id",
+      ),
+    [tickets],
+  );
+  const responsaveis = useMemo(
+    () =>
+      uniqueBy(
+        tickets.flatMap((ticket) => (ticket.atribuidoA ? [ticket.atribuidoA] : [])),
+        "id",
+      ),
+    [tickets],
+  );
+
+  const tabCounts = useMemo(
+    () => ({
+      todos: tickets.filter((ticket) => isStaff || ticket.criadoPor.id === user.id).length,
+      sem_responsavel: tickets.filter(
+        (ticket) => !ticket.atribuidoA && ticket.status !== "resolvido",
+      ).length,
+      meus: tickets.filter((ticket) => ticket.atribuidoA?.id === user.id).length,
+      atrasados: tickets.filter(isAtrasado).length,
+      aguardando: tickets.filter((ticket) => ticket.status === "aguardando_solicitante").length,
+    }),
+    [tickets, user.id, isStaff],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+    const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
+
+    return tickets.filter((ticket) => {
+      if (!isStaff && ticket.criadoPor.id !== user.id) return false;
+      if (tab === "sem_responsavel" && (ticket.atribuidoA || ticket.status === "resolvido"))
+        return false;
+      if (tab === "meus" && (isStaff ? ticket.atribuidoA?.id !== user.id : ticket.criadoPor.id !== user.id)) return false;
+      if (tab === "atrasados" && !isAtrasado(ticket)) return false;
+      if (tab === "aguardando" && ticket.status !== "aguardando_solicitante") return false;
+      if (status !== "all" && ticket.status !== status) return false;
+      if (priority !== "all" && ticket.prioridade !== priority) return false;
+      if (setorId !== "all" && ticket.setor?.id !== setorId) return false;
+      if (responsavelId !== "all" && ticket.atribuidoA?.id !== responsavelId) return false;
+      if (from && new Date(ticket.createdAt) < from) return false;
+      if (to && new Date(ticket.createdAt) > to) return false;
+      if (!q) return true;
+      return (
+        ticket.titulo.toLowerCase().includes(q) ||
+        ticket.descricao.toLowerCase().includes(q) ||
+        String(ticket.numero).includes(q) ||
+        ticket.criadoPor.nomeCompleto.toLowerCase().includes(q) ||
+        (ticket.atribuidoA?.nomeCompleto.toLowerCase().includes(q) ?? false)
+      );
+    });
+  }, [tickets, tab, status, priority, setorId, responsavelId, dateFrom, dateTo, query, user.id, isStaff]);
+
+  const selectedTicket = tickets.find((ticket) => ticket.numero === selected && (isStaff || ticket.criadoPor.id === user.id)) ?? null;
+  if (selectedTicket) {
+    return (
+      <TicketDetail
+        user={user}
+        ticket={selectedTicket}
+        onBack={() => onSelect(null)}
+        onChanged={load}
+      />
+    );
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setStatus("all");
+    setPriority("all");
+    setSetorId("all");
+    setResponsavelId("all");
+    setDateFrom("");
+    setDateTo("");
+    setTab("todos");
+  }
+
+  return (
+    <div className="space-y-7">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-lg text-slate-600">
+          Acompanhe solicitações internas, prazos, responsáveis e status de atendimento.
+        </p>
+        <button
+          onClick={() => setNewTicketOpen(true)}
+          className="flex h-12 items-center gap-2 rounded-md bg-[#062449] px-6 font-semibold text-white shadow-sm hover:bg-[#0a315f]"
+        >
+          <Plus className="h-5 w-5" />
+          Novo chamado
+        </button>
+      </div>
+
+      <StatsRow stats={stats} tickets={tickets} />
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="grid gap-5 xl:grid-cols-[1.7fr_0.75fr_0.8fr_0.8fr_0.8fr_0.85fr_0.85fr_auto]">
+          <FilterSearch value={query} onChange={setQuery} />
+          <FilterSelect
+            label="Status"
+            value={status}
+            onChange={(value) => setStatus(value as TicketStatus | "all")}
+            options={[["all", "Todos"], ...Object.entries(STATUS_LABEL)]}
+          />
+          <FilterSelect
+            label="Prioridade"
+            value={priority}
+            onChange={(value) => setPriority(value as TicketPriority | "all")}
+            options={[["all", "Todas"], ...Object.entries(PRIORITY_LABEL)]}
+          />
+          <FilterSelect
+            label="Setor"
+            value={setorId}
+            onChange={setSetorId}
+            options={[
+              ["all", "Todos"],
+              ...setores.map((setor) => [setor.id, setor.nome] as [string, string]),
+            ]}
+          />
+          <FilterSelect
+            label="Responsável"
+            value={responsavelId}
+            onChange={setResponsavelId}
+            options={[
+              ["all", "Todos"],
+              ...responsaveis.map(
+                (responsavel) => [responsavel.id, responsavel.nomeCompleto] as [string, string],
+              ),
+            ]}
+          />
+          <DateField label="De" value={dateFrom} onChange={setDateFrom} />
+          <DateField label="Até" value={dateTo} onChange={setDateTo} />
+          <button
+            onClick={clearFilters}
+            className="mt-6 flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 px-4 text-sm font-medium"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Limpar filtros
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-5">
+          <div className="flex gap-8 overflow-x-auto">
+            <Tab
+              active={tab === "todos"}
+              label="Todos"
+              count={tabCounts.todos}
+              onClick={() => setTab("todos")}
+            />
+            {isStaff && (
+            <Tab
+              active={tab === "sem_responsavel"}
+              label="Sem responsável"
+              count={tabCounts.sem_responsavel}
+              onClick={() => setTab("sem_responsavel")}
+            />
+            )}
+            <Tab
+              active={tab === "meus"}
+              label="Meus chamados"
+              count={tabCounts.meus}
+              onClick={() => setTab("meus")}
+            />
+            {isStaff && (
+            <Tab
+              active={tab === "atrasados"}
+              label="Atrasados"
+              count={tabCounts.atrasados}
+              onClick={() => setTab("atrasados")}
+            />
+            )}
+            {isStaff && (
+            <Tab
+              active={tab === "aguardando"}
+              label="Aguardando resposta"
+              count={tabCounts.aguardando}
+              onClick={() => setTab("aguardando")}
+            />
+            )}
+          </div>
+          <div className="flex items-center gap-3 py-4">
+            <span className="text-sm font-medium">Visualização</span>
+            <div className="flex rounded-md border border-slate-200 p-1">
+              <button className="rounded bg-[#062449] p-2 text-white">
+                <List className="h-4 w-4" />
+              </button>
+              <button className="p-2 text-slate-500">
+                <Grid2X2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1120px] text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+              <tr>
+                <th className="px-6 py-4 font-medium">Nº</th>
+                <th className="px-6 py-4 font-medium">Título</th>
+                <th className="px-6 py-4 font-medium">Status</th>
+                <th className="px-6 py-4 font-medium">Prioridade</th>
+                <th className="px-6 py-4 font-medium">Setor</th>
+                <th className="px-6 py-4 font-medium">Solicitante</th>
+                <th className="px-6 py-4 font-medium">Responsável</th>
+                <th className="px-6 py-4 font-medium">Aberto em</th>
+                <th className="px-6 py-4 font-medium">Prazo</th>
+                <th className="px-6 py-4" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.slice(0, 8).map((ticket) => (
+                <tr key={ticket.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-5 font-mono text-base">#{ticket.numero}</td>
+                  <td className="max-w-[320px] px-6 py-5">
+                    <button
+                      onClick={() => onSelect(ticket.numero)}
+                      className="block text-left font-semibold hover:underline"
+                    >
+                      {ticket.titulo}
+                    </button>
+                    <p className="mt-1 truncate text-xs text-slate-500">{ticket.descricao}</p>
+                  </td>
+                  <td className="px-6 py-5">
+                    <StatusBadge status={ticket.status} />
+                  </td>
+                  <td className="px-6 py-5">
+                    <PriorityBadge priority={ticket.prioridade} />
+                  </td>
+                  <td className="px-6 py-5">{ticket.setor?.nome ?? "-"}</td>
+                  <td className="px-6 py-5">{ticket.criadoPor.nomeCompleto}</td>
+                  <td className="px-6 py-5">{ticket.atribuidoA?.nomeCompleto ?? "—"}</td>
+                  <td className="px-6 py-5">{formatDateShort(ticket.createdAt)}</td>
+                  <td
+                    className={`px-6 py-5 ${isAtrasado(ticket) ? "font-semibold text-red-600" : ""}`}
+                  >
+                    {formatDue(ticket.prazo)}
+                  </td>
+                  <td className="px-6 py-5">
+                    <MoreVertical className="h-5 w-5 text-slate-500" />
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="px-6 py-12 text-center text-slate-500">
+                    Nenhum chamado encontrado para os filtros selecionados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4 text-sm text-slate-600">
+          <span>
+            Mostrando {filtered.length ? 1 : 0} a {Math.min(8, filtered.length)} de{" "}
+            {filtered.length} chamados
+          </span>
+          <div className="flex items-center gap-2">
+            {[1, 2, 3].map((page) => (
+              <button
+                key={page}
+                className={`h-9 w-9 rounded-md border ${page === 1 ? "border-[#062449] bg-[#062449] text-white" : "border-slate-200 bg-white"}`}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+          <button className="rounded-md border border-slate-200 px-4 py-2">10 por página</button>
+        </div>
+      </section>
+
+      {newTicketOpen && (
+        <NewTicketModal
+          user={user}
+          setores={setores}
+          onClose={() => setNewTicketOpen(false)}
+          onCreated={(ticket) => {
+            setNewTicketOpen(false);
+            load();
+            onSelect(ticket.numero);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TicketDetail({
+  user,
+  ticket,
+  onBack,
+  onChanged,
+}: {
+  user: AuthUser;
+  ticket: Ticket;
+  onBack: () => void;
+  onChanged: () => void | Promise<void>;
+}) {
+  const [comments, setComments] = useState<TicketComment[]>([]);
+  const [publicMessage, setPublicMessage] = useState("");
+  const [internalMessage, setInternalMessage] = useState("");
+  const isStaff = canOperate(user);
+
+  const loadComments = useCallback(async () => {
+    setComments(await api<TicketComment[]>(`/tickets/${ticket.numero}/comments`));
+  }, [ticket.numero]);
+
+  useEffect(() => {
+    loadComments().catch((error) => toast.error(error.message));
+  }, [loadComments]);
+
+  async function patchTicket(
+    payload: Partial<{ status: TicketStatus; prioridade: TicketPriority; atribuidoAId: string }>,
+  ) {
+    await api<Ticket>(`/tickets/${ticket.numero}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    await onChanged();
+  }
+
+  async function assumeTicket() {
+    await patchTicket({ atribuidoAId: user.id });
+    toast.success("Chamado assumido e movido para Em andamento.");
+  }
+
+  async function resolveTicket() {
+    await patchTicket({ status: "resolvido" });
+    toast.success("Chamado resolvido.");
+  }
+
+  async function sendComment(interno: boolean) {
+    const text = interno ? internalMessage : publicMessage;
+    if (!text.trim()) return;
+    await api<TicketComment>(`/tickets/${ticket.numero}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ mensagem: text.trim(), interno, autorId: user.id }),
+    });
+    if (interno) {
+      setInternalMessage("");
+    } else {
+      setPublicMessage("");
+    }
+    await loadComments();
+  }
+
+  const publicComments = comments.filter((comment) => !comment.interno);
+  const internalComments = comments.filter((comment) => comment.interno);
+
+  return (
+    <div className="space-y-5">
+      <button
+        onClick={onBack}
+        className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+      >
+        Voltar
+      </button>
+      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
+        <section className="space-y-5">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-slate-500">Chamado #{ticket.numero}</p>
+            <h2 className="mt-1 text-3xl font-semibold">{ticket.titulo}</h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <StatusBadge status={ticket.status} />
+              <PriorityBadge priority={ticket.prioridade} />
+              <Badge>{ticket.setor?.nome ?? "-"}</Badge>
+              <Badge>{ticket.categoria?.nome ?? "-"}</Badge>
+            </div>
+            <div className="mt-6 grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
+              <Info label="Solicitante" value={ticket.criadoPor.nomeCompleto} />
+              <Info
+                label="Responsável"
+                value={ticket.atribuidoA?.nomeCompleto ?? "Não atribuído"}
+              />
+              <Info label="Aberto em" value={formatDateTime(ticket.createdAt)} />
+              <Info label="Prazo" value={formatDateTime(ticket.prazo)} />
+            </div>
+          </div>
+
+          <DetailCard title="Descrição">
+            <p className="whitespace-pre-wrap text-slate-700">{ticket.descricao}</p>
+          </DetailCard>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <DetailCard title="Anexos">
+              {ticket.anexos ? (
+                <p className="font-medium text-[#062449]">{ticket.anexos}</p>
+              ) : (
+                <p className="text-slate-500">Nenhum anexo enviado.</p>
+              )}
+            </DetailCard>
+            <DetailCard title="Equipamento vinculado">
+              {ticket.equipamentoRelacionado ? (
+                <p className="font-medium">{ticket.equipamentoRelacionado}</p>
+              ) : (
+                <p className="text-slate-500">Nenhum equipamento vinculado.</p>
+              )}
+            </DetailCard>
+          </div>
+
+          <DetailCard title="Linha do tempo">
+            <div className="space-y-3">
+              <TimelineItem
+                date={ticket.createdAt}
+                text={`${ticket.criadoPor.nomeCompleto} abriu o chamado`}
+              />
+              {ticket.atribuidoA && (
+                <TimelineItem
+                  date={ticket.updatedAt}
+                  text={`${ticket.atribuidoA.nomeCompleto} assumiu o chamado`}
+                />
+              )}
+              <TimelineItem
+                date={ticket.updatedAt}
+                text={`Status atual: ${STATUS_LABEL[ticket.status]}`}
+              />
+              {comments.slice(-4).map((comment) => (
+                <TimelineItem
+                  key={comment.id}
+                  date={comment.createdAt}
+                  text={`Comentário: ${comment.mensagem}`}
+                />
+              ))}
+            </div>
+          </DetailCard>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <DetailCard title="Resposta ao solicitante">
+              <CommentList comments={publicComments} />
+              <div className="mt-4 space-y-3">
+                <textarea
+                  value={publicMessage}
+                  onChange={(event) => setPublicMessage(event.target.value)}
+                  className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449]"
+                  placeholder="Mensagem visível ao usuário"
+                />
+                <button
+                  onClick={() => sendComment(false)}
+                  className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Enviar resposta
+                </button>
+              </div>
+            </DetailCard>
+
+            {isStaff && (
+              <DetailCard title="Comentários internos">
+                <CommentList comments={internalComments} />
+                <div className="mt-4 space-y-3">
+                  <textarea
+                    value={internalMessage}
+                    onChange={(event) => setInternalMessage(event.target.value)}
+                    className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449]"
+                    placeholder="Anotação interna para operador/admin"
+                  />
+                  <button
+                    onClick={() => sendComment(true)}
+                    className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Salvar interno
+                  </button>
+                </div>
+              </DetailCard>
+            )}
+          </div>
+        </section>
+
+        <aside className="space-y-5">
+          {isStaff && <DetailCard title="Ações">
+            <div className="space-y-3">
+              <button
+                onClick={assumeTicket}
+                className="h-11 w-full rounded-md bg-[#062449] font-semibold text-white disabled:opacity-50"
+                disabled={ticket.atribuidoA?.id === user.id || ticket.status === "resolvido"}
+              >
+                Assumir chamado
+              </button>
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium">Alterar status</span>
+                <select
+                  value={ticket.status}
+                  onChange={(event) => patchTicket({ status: event.target.value as TicketStatus })}
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3"
+                >
+                  {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium">Alterar prioridade</span>
+                <select
+                  value={ticket.prioridade}
+                  onChange={(event) =>
+                    patchTicket({ prioridade: event.target.value as TicketPriority })
+                  }
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3"
+                >
+                  {Object.entries(PRIORITY_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={resolveTicket}
+                className="h-11 w-full rounded-md bg-emerald-600 font-semibold text-white"
+                disabled={ticket.status === "resolvido"}
+              >
+                Resolver chamado
+              </button>
+            </div>
+          </DetailCard>}
+
+          <DetailCard title="Resumo">
+            <div className="space-y-3 text-sm">
+              <Info label="Categoria" value={ticket.categoria?.nome ?? "-"} />
+              <Info label="Setor" value={ticket.setor?.nome ?? "-"} />
+              <Info label="Atualizado em" value={formatDateTime(ticket.updatedAt)} />
+              <Info label="Resolvido em" value={formatDateTime(ticket.resolvidoEm)} />
+            </div>
+          </DetailCard>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function ConfigPage({ view }: { view: View }) {
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [inventoryEmployees, setInventoryEmployees] = useState<Array<{ id: string; stationId: number | null }>>([]);
+  const [stations, setStations] = useState<Array<{ id: number; code: string; name: string }>>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [departmentName, setDepartmentName] = useState("");
+  const [editingDepartmentId, setEditingDepartmentId] = useState<string | null>(null);
+  const [employeeForm, setEmployeeForm] = useState({
+    id: "",
+    fullName: "",
+    cpf: "",
+    email: "",
+    status: "ACTIVE" as Employee["status"],
+    departmentId: "",
+    stationId: "",
+    role: "usuario" as AppRole,
+    password: "",
+  });
+
+  const loadAdminData = useCallback(() => {
+    const authToken = getSharedAuthToken();
+    Promise.all([
+      api<Department[]>("/departments"),
+      api<Employee[]>("/employees"),
+      api<Categoria[]>("/categorias"),
+      authToken
+        ? fetch("http://localhost:8083/api/v1/employees", { headers: { Authorization: authToken } }).then((response) => response.ok ? response.json() : [])
+        : Promise.resolve([]),
+      authToken
+        ? fetch("http://localhost:8083/api/v1/stations", { headers: { Authorization: authToken } }).then((response) => response.ok ? response.json() : [])
+        : Promise.resolve([]),
+    ])
+      .then(([nextDepartments, nextEmployees, nextCategorias, nextInventoryEmployees, nextStations]) => {
+        setDepartments(nextDepartments);
+        setEmployees(nextEmployees);
+        setCategorias(nextCategorias);
+        setInventoryEmployees(nextInventoryEmployees as Array<{ id: string; stationId: number | null }>);
+        setStations(nextStations as Array<{ id: number; code: string; name: string }>);
+      })
+      .catch((error) => toast.error(error.message));
+  }, []);
+
+  useEffect(() => {
+    loadAdminData();
+  }, [loadAdminData]);
+
+  async function saveDepartment(event: FormEvent) {
+    event.preventDefault();
+    const name = departmentName.trim();
+    if (!name) {
+      toast.error("Informe o nome do departamento.");
+      return;
+    }
+    try {
+      if (editingDepartmentId) {
+        await api<Department>(`/departments/${editingDepartmentId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name }),
+        });
+        toast.success("Departamento atualizado.");
+      } else {
+        await api<Department>("/departments", {
+          method: "POST",
+          body: JSON.stringify({ name, active: true }),
+        });
+        toast.success("Departamento cadastrado.");
+      }
+      setDepartmentName("");
+      setEditingDepartmentId(null);
+      loadAdminData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar departamento");
+    }
+  }
+
+  async function toggleDepartment(department: Department) {
+    await api<Department>(`/departments/${department.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ active: !department.active }),
+    });
+    loadAdminData();
+  }
+
+  function editEmployee(employee: Employee) {
+    setEmployeeForm({
+      id: employee.id,
+      fullName: employee.fullName,
+      cpf: employee.cpf ?? "",
+      email: employee.email ?? "",
+      status: employee.status,
+      departmentId: employee.department?.id ?? "",
+      stationId: inventoryEmployees.find((item) => item.id === employee.id)?.stationId?.toString() ?? "",
+      role: employee.role ?? "usuario",
+      password: "",
+    });
+  }
+
+  function clearEmployeeForm() {
+    setEmployeeForm({ id: "", fullName: "", cpf: "", email: "", status: "ACTIVE", departmentId: "", stationId: "", role: "usuario", password: "" });
+  }
+
+  async function saveEmployee(event: FormEvent) {
+    event.preventDefault();
+    if (!employeeForm.fullName.trim()) {
+      toast.error("Informe o nome do funcionario.");
+      return;
+    }
+    const payload = {
+      fullName: employeeForm.fullName.trim(),
+      cpf: employeeForm.cpf.trim() || null,
+      email: employeeForm.email.trim() || null,
+      status: employeeForm.status,
+      departmentId: employeeForm.departmentId || null,
+      role: employeeForm.role,
+      password: employeeForm.password.trim() || null,
+    };
+    try {
+      const previousStationId = employeeForm.id
+        ? inventoryEmployees.find((item) => item.id === employeeForm.id)?.stationId?.toString() ?? ""
+        : "";
+      let savedEmployee: Employee;
+      if (employeeForm.id) {
+        savedEmployee = await api<Employee>(`/employees/${employeeForm.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        toast.success("Funcionario atualizado.");
+      } else {
+        savedEmployee = await api<Employee>("/employees", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        toast.success("Funcionario cadastrado.");
+      }
+      await syncStationResponsibility(savedEmployee.id, previousStationId, employeeForm.stationId);
+      clearEmployeeForm();
+      loadAdminData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar funcionario");
+    }
+  }
+
+  const showDepartments = view === "setores" || view === "configuracoes";
+  const showEmployees = view === "usuarios" || view === "configuracoes";
+
+  return (
+    <div className="space-y-6">
+      {showDepartments && (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <header className="border-b border-slate-200 p-5">
+            <h3 className="font-semibold">Departamentos</h3>
+          </header>
+          <form onSubmit={saveDepartment} className="grid gap-3 border-b border-slate-100 p-5 md:grid-cols-[1fr_auto_auto]">
+            <input
+              value={departmentName}
+              onChange={(event) => setDepartmentName(event.target.value)}
+              className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+              placeholder="Nome do departamento"
+            />
+            <button className="h-11 rounded-md bg-[#062449] px-5 font-semibold text-white">
+              {editingDepartmentId ? "Salvar" : "Cadastrar"}
+            </button>
+            {editingDepartmentId && (
+              <button type="button" onClick={() => { setEditingDepartmentId(null); setDepartmentName(""); }} className="h-11 rounded-md border border-slate-200 px-5">
+                Cancelar
+              </button>
+            )}
+          </form>
+          <AdminList
+            items={departments.map((department) => ({
+              id: department.id,
+              label: department.name,
+              active: department.active,
+              detail: `${employees.filter((employee) => employee.department?.id === department.id).length} funcionario(s)`,
+              onEdit: () => {
+                setEditingDepartmentId(department.id);
+                setDepartmentName(department.name);
+              },
+              onToggle: () => void toggleDepartment(department),
+            }))}
+          />
+        </section>
+      )}
+
+      {showEmployees && (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <header className="border-b border-slate-200 p-5">
+            <h3 className="font-semibold">Funcionarios</h3>
+          </header>
+          <form onSubmit={saveEmployee} className="grid gap-4 border-b border-slate-100 p-5 lg:grid-cols-3">
+            <input value={employeeForm.fullName} onChange={(event) => setEmployeeForm((current) => ({ ...current, fullName: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="Nome completo" />
+            <input value={employeeForm.email} onChange={(event) => setEmployeeForm((current) => ({ ...current, email: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="E-mail" />
+            <input value={employeeForm.cpf} onChange={(event) => setEmployeeForm((current) => ({ ...current, cpf: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="CPF" />
+            <select value={employeeForm.departmentId} onChange={(event) => setEmployeeForm((current) => ({ ...current, departmentId: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+              <option value="">Sem departamento</option>
+              {departments.filter((department) => department.active).map((department) => (
+                <option key={department.id} value={department.id}>{department.name}</option>
+              ))}
+            </select>
+            <select value={employeeForm.status} onChange={(event) => setEmployeeForm((current) => ({ ...current, status: event.target.value as Employee["status"] }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+              <option value="ACTIVE">Ativo</option>
+              <option value="INACTIVE">Inativo</option>
+            </select>
+            <select value={employeeForm.role} onChange={(event) => setEmployeeForm((current) => ({ ...current, role: event.target.value as AppRole }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+              <option value="usuario">Funcionario</option>
+              <option value="operador">Operador</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <input type="password" value={employeeForm.password} onChange={(event) => setEmployeeForm((current) => ({ ...current, password: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder={employeeForm.id ? "Nova senha (opcional)" : "Senha inicial (padrao 123456)"} />
+            <select value={employeeForm.stationId} onChange={(event) => setEmployeeForm((current) => ({ ...current, stationId: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+              <option value="">Sem estacao</option>
+              {stations.map((station) => (
+                <option key={station.id} value={station.id}>{station.code} - {station.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-3">
+              <button className="h-11 flex-1 rounded-md bg-[#062449] px-5 font-semibold text-white">
+                {employeeForm.id ? "Salvar" : "Cadastrar"}
+              </button>
+              {employeeForm.id && <button type="button" onClick={clearEmployeeForm} className="h-11 rounded-md border border-slate-200 px-5">Cancelar</button>}
+            </div>
+          </form>
+          <AdminList
+            items={employees.map((employee) => ({
+              id: employee.id,
+              label: `${employee.fullName}${employee.username ? ` (${employee.username})` : ""}`,
+              active: employee.status === "ACTIVE",
+              detail: `${employee.department?.name ?? "Sem departamento"}${employee.email ? ` · ${employee.email}` : ""}${stationLabel(inventoryEmployees.find((item) => item.id === employee.id)?.stationId, stations)}`,
+              onEdit: () => editEmployee(employee),
+              onToggle: () => {
+                setEmployeeForm({
+                  id: employee.id,
+                  fullName: employee.fullName,
+                  cpf: employee.cpf ?? "",
+                  email: employee.email ?? "",
+                  status: employee.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+                  departmentId: employee.department?.id ?? "",
+                  role: employee.role ?? "usuario",
+                  password: "",
+                  stationId: inventoryEmployees.find((item) => item.id === employee.id)?.stationId?.toString() ?? "",
+                });
+                void api<Employee>(`/employees/${employee.id}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ status: employee.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }),
+                }).then(loadAdminData);
+              },
+            }))}
+          />
+        </section>
+      )}
+
+      {view === "configuracoes" && (
+        <ListCard
+          title="Categorias de chamado"
+          items={categorias.map((categoria) => ({
+            id: categoria.id,
+            label: categoria.nome,
+            active: categoria.ativo,
+          }))}
+        />
+      )}
+    </div>
+  );
+}
+
+function PlaceholderPage({ title }: { title: string }) {
+  return (
+    <section className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+      <h2 className="text-2xl font-semibold">{title}</h2>
+      <p className="mt-3 text-slate-500">
+        Placeholder visual. Falta a especificação desta área para substituir por uma tela final.
+      </p>
+    </section>
+  );
+}
+
+function AdminList({
+  items,
+}: {
+  items: Array<{
+    id: string;
+    label: string;
+    active: boolean;
+    detail?: string;
+    onEdit: () => void;
+    onToggle: () => void;
+  }>;
+}) {
+  return (
+    <ul className="divide-y divide-slate-100 p-5">
+      {items.length === 0 && <li className="py-8 text-center text-sm text-slate-500">Nenhum registro cadastrado.</li>}
+      {items.map((item) => (
+        <li key={item.id} className="flex items-center justify-between gap-4 py-3 text-sm">
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{item.label}</span>
+            {item.detail && <span className="block truncate text-xs text-slate-500">{item.detail}</span>}
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <Badge className={item.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}>
+              {item.active ? "Ativo" : "Inativo"}
+            </Badge>
+            <button type="button" onClick={item.onEdit} className="h-9 rounded-md border border-slate-200 px-3 font-medium hover:bg-slate-50">
+              Editar
+            </button>
+            <button type="button" onClick={item.onToggle} className="h-9 rounded-md border border-slate-200 px-3 font-medium hover:bg-slate-50">
+              {item.active ? "Inativar" : "Ativar"}
+            </button>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function getSharedAuthToken() {
+  const cookieToken = document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith("cart_rio_auth="))
+    ?.slice("cart_rio_auth=".length);
+  if (cookieToken) return decodeURIComponent(cookieToken);
+
+  const raw = localStorage.getItem("cart-rio-auth");
+  if (!raw) return null;
+  try {
+    return (JSON.parse(raw) as { token?: string }).token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function syncStationResponsibility(employeeId: string, previousStationId: string, nextStationId: string) {
+  const token = getSharedAuthToken();
+  if (!token || previousStationId === nextStationId) return;
+  const headers = { "Content-Type": "application/json", Authorization: token };
+  if (previousStationId) {
+    await fetch(`http://localhost:8083/api/v1/stations/${previousStationId}/responsible`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ employeeId: null }),
+    });
+  }
+  if (nextStationId) {
+    await fetch(`http://localhost:8083/api/v1/stations/${nextStationId}/responsible`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ employeeId }),
+    });
+  }
+}
+
+function stationLabel(stationId: number | null | undefined, stations: Array<{ id: number; code: string; name: string }>) {
+  if (!stationId) return "";
+  const station = stations.find((item) => item.id === stationId);
+  return station ? ` · Estacao ${station.code}` : "";
+}
+
+function NewTicketModal({
+  user,
+  setores,
+  onClose,
+  onCreated,
+}: {
+  user: AuthUser;
+  setores: Setor[];
+  onClose: () => void;
+  onCreated: (ticket: Ticket) => void;
+}) {
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [titulo, setTitulo] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
+  const [setorId, setSetorId] = useState(setores[0]?.id ?? "");
+  const [prioridade, setPrioridade] = useState<TicketPriority>("media");
+  const [descricao, setDescricao] = useState("");
+  const [anexos, setAnexos] = useState("");
+  const [equipamentoRelacionado, setEquipamentoRelacionado] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    api<Categoria[]>("/categorias")
+      .then((data) => {
+        setCategorias(data);
+        setCategoriaId(data[0]?.id ?? "");
+      })
+      .catch((error) => toast.error(error.message));
+  }, []);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!titulo.trim() || !descricao.trim()) {
+      toast.error("Informe título e descrição.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const ticket = await api<Ticket>("/tickets", {
+        method: "POST",
+        body: JSON.stringify({
+          titulo: titulo.trim(),
+          descricao: descricao.trim(),
+          prioridade,
+          categoriaId: categoriaId || null,
+          setorId: setorId || null,
+          criadoPorId: user.id,
+          anexos: anexos.trim() || null,
+          equipamentoRelacionado: equipamentoRelacionado.trim() || null,
+        }),
+      });
+      toast.success("Chamado aberto com status Aberto.");
+      onCreated(ticket);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao abrir chamado");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4">
+      <form
+        onSubmit={submit}
+        className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white shadow-2xl"
+      >
+        <header className="border-b border-slate-200 px-6 py-5">
+          <h2 className="text-2xl font-semibold">Novo chamado</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Solicitante, data/hora e status inicial são automáticos.
+          </p>
+        </header>
+
+        <div className="grid gap-5 p-6 md:grid-cols-2">
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium">Título</span>
+            <input
+              value={titulo}
+              onChange={(event) => setTitulo(event.target.value)}
+              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+              placeholder="Impressora da procuração não imprime"
+            />
+          </label>
+          <FilterSelect
+            label="Categoria"
+            value={categoriaId}
+            onChange={setCategoriaId}
+            options={[
+              ["", "Selecione"],
+              ...categorias.map((categoria) => [categoria.id, categoria.nome] as [string, string]),
+            ]}
+          />
+          <FilterSelect
+            label="Setor"
+            value={setorId}
+            onChange={setSetorId}
+            options={[
+              ["", "Selecione"],
+              ...setores.map((setor) => [setor.id, setor.nome] as [string, string]),
+            ]}
+          />
+          <FilterSelect
+            label="Prioridade"
+            value={prioridade}
+            onChange={(value) => setPrioridade(value as TicketPriority)}
+            options={Object.entries(PRIORITY_LABEL)}
+          />
+          <label className="space-y-1">
+            <span className="text-sm font-medium">Equipamento relacionado</span>
+            <input
+              value={equipamentoRelacionado}
+              onChange={(event) => setEquipamentoRelacionado(event.target.value)}
+              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+              placeholder="Impressora Konica - PROC-02"
+            />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium">Descrição do problema</span>
+            <textarea
+              value={descricao}
+              onChange={(event) => setDescricao(event.target.value)}
+              className="min-h-36 w-full rounded-md border border-slate-200 p-3 outline-none focus:border-[#062449]"
+              placeholder="Explique o que está acontecendo, quando começou e se aparece alguma mensagem de erro."
+            />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium">Anexos</span>
+            <input
+              value={anexos}
+              onChange={(event) => setAnexos(event.target.value)}
+              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+              placeholder="imagem-erro.jpg, log.pdf"
+            />
+          </label>
+        </div>
+
+        <footer className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-md border border-slate-200 px-4 font-medium"
+          >
+            Cancelar
+          </button>
+          <button
+            className="h-10 rounded-md bg-[#062449] px-5 font-semibold text-white"
+            disabled={submitting}
+          >
+            {submitting ? "Abrindo..." : "Abrir chamado"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function DetailCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="mb-4 text-lg font-semibold">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 font-medium text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function TimelineItem({ date, text }: { date: string | null; text: string }) {
+  return (
+    <div className="flex gap-3">
+      <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#062449]" />
+      <p className="text-sm text-slate-700">
+        <span className="font-medium text-slate-900">{formatDateTime(date)}</span> — {text}
+      </p>
+    </div>
+  );
+}
+
+function CommentList({ comments }: { comments: TicketComment[] }) {
+  if (comments.length === 0)
+    return (
+      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Nenhum comentário ainda.</p>
+    );
+  return (
+    <div className="max-h-72 space-y-2 overflow-auto">
+      {comments.map((comment) => (
+        <div key={comment.id} className="rounded-lg bg-slate-50 p-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium">{comment.autor.nomeCompleto}</span>
+            <span className="text-xs text-slate-500">{formatDateTime(comment.createdAt)}</span>
+          </div>
+          <p className="mt-1 text-slate-700">{comment.mensagem}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  icon: Icon,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  icon: LucideIcon;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-base font-medium text-[#071936]">{label}</span>
+      <div className="mt-2 flex h-14 items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 shadow-sm">
+        <Icon className="h-5 w-5 text-slate-400" />
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          type={type}
+          className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-slate-400"
+          placeholder={placeholder}
+        />
+      </div>
+    </label>
+  );
+}
+
+function StatsRow({ stats, tickets }: { stats: DashboardStats | null; tickets: Ticket[] }) {
+  return (
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+      <StatCard
+        label="Abertos"
+        value={stats?.aberto ?? 0}
+        suffix="chamados"
+        icon={FileText}
+        tone="blue"
+      />
+      <StatCard
+        label="Em andamento"
+        value={stats?.emAndamento ?? 0}
+        suffix="chamados"
+        icon={TicketIcon}
+        tone="amber"
+      />
+      <StatCard
+        label="Atrasados"
+        value={stats?.atrasados ?? 0}
+        suffix="chamados"
+        icon={Clock}
+        tone="red"
+      />
+      <StatCard
+        label="Resolvidos (mês)"
+        value={stats?.resolvidosMes ?? 0}
+        suffix="chamados"
+        icon={CheckCircle2}
+        tone="emerald"
+      />
+      <StatCard
+        label="Tempo médio"
+        value={tickets.length ? "4h 35m" : "0h"}
+        suffix="de resolução"
+        icon={Clock}
+        tone="violet"
+      />
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  suffix,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  suffix: string;
+  icon: LucideIcon;
+  tone: "blue" | "amber" | "red" | "emerald" | "violet";
+}) {
+  const tones = {
+    blue: "from-[#0b4f8f] to-[#0c3563]",
+    amber: "from-[#efc24b] to-[#d89a08]",
+    red: "from-[#f06464] to-[#dd333a]",
+    emerald: "from-[#55c886] to-[#2fa866]",
+    violet: "from-[#8f7cc9] to-[#6854aa]",
+  };
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex items-center gap-5">
+        <div
+          className={`grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br text-white ${tones[tone]}`}
+        >
+          <Icon className="h-8 w-8" />
+        </div>
+        <div>
+          <p className="text-base text-slate-700">{label}</p>
+          <p className="mt-1 text-4xl font-semibold tracking-[-0.02em]">{value}</p>
+          <p className="mt-1 text-base text-slate-500">{suffix}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterSearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-1 text-sm">
+      <span className="invisible font-medium">Busca</span>
+      <div className="flex h-11 items-center gap-3 rounded-md border border-slate-200 px-3">
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-w-0 flex-1 outline-none"
+          placeholder="Buscar por título, nº ou solicitante..."
+        />
+        <Search className="h-5 w-5 text-slate-500" />
+      </div>
+    </label>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+}) {
+  return (
+    <label className="space-y-1 text-sm">
+      <span className="font-medium">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 outline-none"
+      >
+        {options.map(([optionValue, label]) => (
+          <option key={optionValue} value={optionValue}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="space-y-1 text-sm">
+      <span className="font-medium">{label}</span>
+      <div className="flex h-11 items-center gap-2 rounded-md border border-slate-200 px-3">
+        <input
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent outline-none"
+        />
+        <CalendarDays className="h-4 w-4 text-slate-500" />
+      </div>
+    </label>
+  );
+}
+
+function Tab({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative h-16 whitespace-nowrap px-1 text-sm font-medium ${active ? "text-[#071936]" : "text-slate-600"}`}
+    >
+      {label}
+      {typeof count === "number" && (
+        <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{count}</span>
+      )}
+      {active && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#071936]" />}
+    </button>
+  );
+}
+
+function StatusBadge({ status }: { status: TicketStatus }) {
+  const classes = {
+    aberto: "bg-amber-50 text-amber-700",
+    em_analise: "bg-blue-50 text-blue-700",
+    em_andamento: "bg-blue-100 text-blue-700",
+    aguardando_solicitante: "bg-violet-100 text-violet-700",
+    resolvido: "bg-emerald-100 text-emerald-700",
+  };
+  return <Badge className={classes[status]}>{STATUS_LABEL[status]}</Badge>;
+}
+
+function PriorityBadge({ priority }: { priority: TicketPriority }) {
+  const classes = {
+    baixa: "bg-emerald-100 text-emerald-700",
+    media: "bg-orange-100 text-orange-700",
+    alta: "bg-red-100 text-red-700",
+  };
+  return <Badge className={classes[priority]}>{PRIORITY_LABEL[priority]}</Badge>;
+}
+
+function Badge({ className = "", children }: { className?: string; children: ReactNode }) {
+  return (
+    <span className={`inline-flex rounded-md px-3 py-1 text-sm font-medium ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function ListCard({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ id: string; label: string; active: boolean; detail?: string }>;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <header className="border-b border-slate-200 p-5">
+        <h3 className="font-semibold">{title}</h3>
+      </header>
+      <ul className="divide-y divide-slate-100 p-5">
+        {items.map((item) => (
+          <li key={item.id} className="flex items-center justify-between py-3 text-sm">
+            <span>
+              <span className="block font-medium">{item.label}</span>
+              {item.detail && <span className="block text-xs text-slate-500">{item.detail}</span>}
+            </span>
+            <Badge
+              className={
+                item.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+              }
+            >
+              {item.active ? "Ativo" : "Inativo"}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function uniqueBy<T extends { id: string }>(items: T[], key: keyof T) {
+  return Array.from(new Map(items.map((item) => [item[key], item])).values());
+}
+
+function formatDateShort(value: string) {
+  return new Date(value).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDue(value: string | null) {
+  if (!value) return "—";
+  if (new Date(value).getTime() < Date.now()) return "Hoje";
+  return formatDateShort(value);
+}

@@ -1,0 +1,73 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cart_rio_hub
+      POSTGRES_USER: cart_rio
+      POSTGRES_PASSWORD: cart_rio
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cart_rio -d cart_rio_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cart_rio_hub
+      SPRING_DATASOURCE_USERNAME: cart_rio
+      SPRING_DATASOURCE_PASSWORD: cart_rio
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+  inventory-backend:
+    build:
+      context: ./inventario/backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/cart_rio_hub
+      DB_USERNAME: cart_rio
+      DB_PASSWORD: cart_rio
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:8082,http://localhost:8080
+      JAVA_OPTS: -Xms128m -Xmx512m
+    ports:
+      - "8083:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  inventory-frontend:
+    build:
+      context: ./inventario
+      dockerfile: Dockerfile
+    ports:
+      - "8082:80"
+    depends_on:
+      inventory-backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

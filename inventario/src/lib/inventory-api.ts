@@ -1,0 +1,148 @@
+import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
+import type { AssetStatus, EmployeeStatus, SpaceType, StationStatus } from "@/features/inventory-map/types/inventoryMap.types";
+
+export interface ApiDepartment {
+  id: string;
+  name: string;
+}
+
+export interface ApiSpace {
+  id: number;
+  name: string;
+  type: SpaceType;
+  parentId: number | null;
+  sortOrder: number;
+}
+
+export interface ApiEmployee {
+  id: string;
+  fullName: string;
+  cpf: string | null;
+  status: EmployeeStatus;
+  departmentId: string | null;
+  departmentName: string | null;
+  stationId: number | null;
+  stationCode: string | null;
+}
+
+export interface ApiStation {
+  id: number;
+  code: string;
+  name: string;
+  locationCode: string | null;
+  description: string | null;
+  status: StationStatus;
+  observation: string | null;
+  spaceId: number | null;
+  spaceName: string | null;
+  layoutElementRef: string | null;
+  lastInventoryCheckAt: string | null;
+  responsibleEmployeeId: string | null;
+  responsibleEmployeeName: string | null;
+  responsibleDepartmentId: string | null;
+  responsibleDepartmentName: string | null;
+  assetCount: number;
+}
+
+export interface ApiAsset {
+  assetId: number;
+  assetCode: string;
+  assetType: string;
+  assetDescription: string;
+  serialNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  processor: string | null;
+  operatingSystem: string | null;
+  assetStatus: AssetStatus;
+  assetOrigin: "MANUAL" | "LEGACY_GLPI";
+  stationId: number | null;
+  stationCode: string | null;
+  stationName: string | null;
+  stationStatus: StationStatus | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  assignedAt: string | null;
+  lastInventoryCheckAt: string | null;
+  assetUpdatedAt: string | null;
+}
+
+export interface ApiHistoryEvent {
+  type: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface ApiLayoutElement {
+  id: string;
+  elementType: "WALL" | "PARTITION" | "DESK" | "CHAIR" | "LABEL" | "ROOM_BLOCK";
+  layer: "structural" | "furniture" | "labels";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  label?: string;
+  fillColor?: string;
+  strokeColor?: string;
+  fontSize?: number;
+  stationId?: string;
+  zIndex: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ApiLayout {
+  id: string;
+  name: string;
+  code: string;
+  width: number;
+  height: number;
+  spaceId: number;
+  elements: ApiLayoutElement[];
+}
+
+export interface ApiAuthMe {
+  username: string;
+  role: "ADMIN" | "OPERATOR" | "USER";
+  roles: ("ADMIN" | "OPERATOR" | "USER")[];
+  displayRole: string;
+}
+
+export const inventoryApi = {
+  me: () => apiGet<ApiAuthMe>("/auth/me"),
+  listDepartments: () => apiGet<ApiDepartment[]>("/departments"),
+  createDepartment: (body: { name: string }) => apiPost<ApiDepartment>("/departments", body),
+  updateDepartment: (id: string, body: { name: string }) => apiPut<ApiDepartment>(`/departments/${id}`, body),
+  deleteDepartment: (id: string) => apiDelete(`/departments/${id}`),
+
+  listSpaces: () => apiGet<ApiSpace[]>("/spaces"),
+  createSpace: (body: { name: string; type: SpaceType; parentId?: number; sortOrder?: number }) => apiPost<ApiSpace>("/spaces", body),
+  updateSpace: (id: string, body: { name: string; type: SpaceType; parentId?: number; sortOrder?: number }) => apiPut<ApiSpace>(`/spaces/${id}`, body),
+  deleteSpace: (id: string) => apiDelete(`/spaces/${id}`),
+
+  listEmployees: () => apiGet<ApiEmployee[]>("/employees"),
+  createEmployee: (body: { fullName: string; cpf?: string; status: EmployeeStatus; departmentId?: string | null }) => apiPost<ApiEmployee>("/employees", body),
+  updateEmployee: (id: string, body: { fullName: string; cpf?: string; status: EmployeeStatus; departmentId?: string | null }) => apiPut<ApiEmployee>(`/employees/${id}`, body),
+  deleteEmployee: (id: string) => apiDelete(`/employees/${id}`),
+
+  listStations: () => apiGet<ApiStation[]>("/stations"),
+  createStation: (body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string }) => apiPost<ApiStation>("/stations", body),
+  updateStation: (id: string, body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string }) => apiPut<ApiStation>(`/stations/${id}`, body),
+  deleteStation: (id: string) => apiDelete(`/stations/${id}`),
+  changeResponsible: (id: string, body: { employeeId?: string | null; forceMove?: boolean; notes?: string }) => apiPut<ApiStation>(`/stations/${id}/responsible`, body),
+  stationHistory: (id: string) => apiGet<ApiHistoryEvent[]>(`/stations/${id}/history`),
+
+  listAssets: () => apiGet<ApiAsset[]>("/assets-flat"),
+  createAsset: (body: { assetCode: string; type: string; description: string; serialNumber?: string; status: AssetStatus; origin?: "MANUAL" | "LEGACY_GLPI"; manufacturer?: string; model?: string; processor?: string; operatingSystem?: string; notes?: string }) => apiPost<ApiAsset>("/assets", body),
+  updateAsset: (id: string, body: { assetCode: string; type: string; description: string; serialNumber?: string; status: AssetStatus; origin?: "MANUAL" | "LEGACY_GLPI"; manufacturer?: string; model?: string; processor?: string; operatingSystem?: string; notes?: string }) => apiPut<ApiAsset>(`/assets/${id}`, body),
+  deleteAsset: (id: string) => apiDelete(`/assets/${id}`),
+  linkAsset: (id: string, body: { stationId: number; performedBy?: string; reason?: string }) => apiPost<ApiAsset>(`/assets/${id}/link`, body),
+  unlinkAsset: (id: string, performedBy?: string) => apiPost<ApiAsset>(`/assets/${id}/unlink${performedBy ? `?performedBy=${encodeURIComponent(performedBy)}` : ""}`),
+  transferAsset: (id: string, body: { toStationId: number; performedBy?: string; reason?: string }) => apiPost<ApiAsset>(`/assets/${id}/transfer`, body),
+  assetHistory: (id: string) => apiGet<ApiHistoryEvent[]>(`/assets/${id}/history`),
+
+  getLayout: (spaceId: string) => apiGet<ApiLayout | null>(`/layouts/${spaceId}`),
+  saveLayout: (spaceId: string, body: ApiLayout) => apiPut<ApiLayout>(`/layouts/${spaceId}`, body),
+};

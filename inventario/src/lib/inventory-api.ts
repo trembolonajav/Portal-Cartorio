@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
+import { apiDelete, apiGet, apiPost, apiPostForm, apiPut, apiUrl } from "@/lib/api";
 import type { AssetStatus, EmployeeStatus, SpaceType, StationStatus } from "@/features/inventory-map/types/inventoryMap.types";
 
 export interface ApiDepartment {
@@ -110,6 +110,65 @@ export interface ApiAuthMe {
   displayRole: string;
 }
 
+export type ApiDisposalStatus = "DRAFT" | "WAITING_SIGNATURE" | "FINALIZED" | "CANCELLED";
+export type ApiDisposalReason = "OBSOLESCENCE" | "IRREPAIRABLE_DEFECT" | "PHYSICAL_DAMAGE" | "LOSS" | "REPLACEMENT" | "DONATION" | "DISCARD" | "SALE" | "OTHER";
+
+export interface ApiAssetDisposalItem {
+  id: number;
+  assetId: number;
+  assetCode: string;
+  description: string;
+  category: string;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  department: string | null;
+  station: string | null;
+  responsible: string | null;
+  status: string;
+  origin: string;
+}
+
+export interface ApiAssetDisposalDocument {
+  id: number;
+  type: string;
+  fileName: string;
+  mimeType: string | null;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface ApiAssetDisposalEvent {
+  id: number;
+  type: string;
+  description: string;
+  username: string | null;
+  createdAt: string;
+}
+
+export interface ApiAssetDisposal {
+  id: number;
+  number: string;
+  status: ApiDisposalStatus;
+  reason: ApiDisposalReason;
+  destination: string;
+  justification: string;
+  notes: string | null;
+  requestedBy: string | null;
+  authorizedByName: string;
+  authorizationDate: string | null;
+  createdAt: string;
+  termGeneratedAt: string | null;
+  signedDocumentUploadedAt: string | null;
+  finalizedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  itemCount: number;
+  items: ApiAssetDisposalItem[];
+  documents: ApiAssetDisposalDocument[];
+  events: ApiAssetDisposalEvent[];
+}
+
 export const inventoryApi = {
   me: () => apiGet<ApiAuthMe>("/auth/me"),
   listDepartments: () => apiGet<ApiDepartment[]>("/departments"),
@@ -142,6 +201,20 @@ export const inventoryApi = {
   unlinkAsset: (id: string, performedBy?: string) => apiPost<ApiAsset>(`/assets/${id}/unlink${performedBy ? `?performedBy=${encodeURIComponent(performedBy)}` : ""}`),
   transferAsset: (id: string, body: { toStationId: number; performedBy?: string; reason?: string }) => apiPost<ApiAsset>(`/assets/${id}/transfer`, body),
   assetHistory: (id: string) => apiGet<ApiHistoryEvent[]>(`/assets/${id}/history`),
+
+  listDisposals: () => apiGet<ApiAssetDisposal[]>("/asset-disposals"),
+  getDisposal: (id: string) => apiGet<ApiAssetDisposal>(`/asset-disposals/${id}`),
+  createDisposal: (body: { assetIds: number[]; reason: ApiDisposalReason; destination: string; justification: string; notes?: string; authorizedByName: string; authorizationDate?: string; requestedBy?: string }) => apiPost<ApiAssetDisposal>("/asset-disposals", body),
+  generateDisposalTerm: (id: string, username?: string) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/generate-term${username ? `?username=${encodeURIComponent(username)}` : ""}`),
+  disposalTermUrl: (id: string) => apiUrl(`/asset-disposals/${id}/term`),
+  uploadSignedDisposalTerm: (id: string, file: File, username?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (username) form.append("username", username);
+    return apiPostForm<ApiAssetDisposal>(`/asset-disposals/${id}/upload-signed-term`, form);
+  },
+  finalizeDisposal: (id: string, username?: string) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/finalize${username ? `?username=${encodeURIComponent(username)}` : ""}`),
+  cancelDisposal: (id: string, body: { reason: string; username?: string }) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/cancel`, body),
 
   getLayout: (spaceId: string) => apiGet<ApiLayout | null>(`/layouts/${spaceId}`),
   saveLayout: (spaceId: string, body: ApiLayout) => apiPut<ApiLayout>(`/layouts/${spaceId}`, body),

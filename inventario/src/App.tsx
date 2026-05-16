@@ -10,6 +10,7 @@ import InventoryMapPage from "./pages/InventoryMapPage";
 import PatrimoniosPage from "./pages/PatrimoniosPage";
 import EspacosPage from "./pages/EspacosPage";
 import ImportarPage from "./pages/ImportarPage";
+import BaixasPatrimoniaisPage from "./pages/BaixasPatrimoniaisPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -102,6 +103,7 @@ const App = () => (
             <Route path="/login" element={<RedirectToPortalLogin />} />
             <Route path="/" element={<ProtectedRoute><InventoryMapPage /></ProtectedRoute>} />
             <Route path="/patrimonios" element={<ProtectedRoute><PatrimoniosPage /></ProtectedRoute>} />
+            <Route path="/baixas-patrimoniais" element={<ProtectedRoute><BaixasPatrimoniaisPage /></ProtectedRoute>} />
             <Route path="/departamentos" element={<Navigate to="/" replace />} />
             <Route path="/funcionarios" element={<Navigate to="/" replace />} />
             <Route path="/espacos" element={<ProtectedRoute><EspacosPage /></ProtectedRoute>} />

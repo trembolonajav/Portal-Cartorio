@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Boxes, Package } from 'lucide-react';
+import { MapPin, Boxes, Package, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InventoryMapCanvas from '@/components/inventory-map/InventoryMapCanvas';
 import BuilderToolbar from '@/components/inventory-map/BuilderToolbar';
@@ -83,6 +83,10 @@ const InventoryMapPage = () => {
           <Button variant="ghost" size="sm" className="text-primary-foreground/70 hover:text-primary-foreground text-xs" onClick={() => navigate('/patrimonios')}>
             <Package className="h-3.5 w-3.5 mr-1.5" />
             Patrimônios
+          </Button>
+          <Button variant="ghost" size="sm" className="text-primary-foreground/70 hover:text-primary-foreground text-xs" onClick={() => navigate('/baixas-patrimoniais')}>
+            <FileText className="h-3.5 w-3.5 mr-1.5" />
+            Baixas
           </Button>
           <SessionActions />
         </div>

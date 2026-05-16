@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Search, Pencil, Trash2, MapPin, Package, UserCircle, Building2, Unlink, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Pencil, Trash2, MapPin, Package, UserCircle, Building2, Unlink, Upload, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -202,6 +202,10 @@ const PatrimoniosPage = () => {
               Importar
             </Button>
           )}
+          <Button size="sm" variant="ghost" onClick={() => navigate('/baixas-patrimoniais')} className="text-xs text-primary-foreground/70 hover:text-primary-foreground">
+            <FileText className="h-3.5 w-3.5 mr-1.5" />
+            Baixas
+          </Button>
           <Button size="sm" variant="secondary" onClick={openNew} className="text-xs">
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Novo Patrimônio

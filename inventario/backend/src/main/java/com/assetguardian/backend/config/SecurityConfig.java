@@ -31,6 +31,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/v1/assets/*/link").hasAnyRole("ADMIN", "OPERATOR")
                 .requestMatchers(HttpMethod.POST, "/api/v1/assets/*/unlink").hasAnyRole("ADMIN", "OPERATOR")
                 .requestMatchers(HttpMethod.POST, "/api/v1/assets/*/transfer").hasAnyRole("ADMIN", "OPERATOR")
+                .requestMatchers(HttpMethod.POST, "/api/v1/asset-disposals/**").hasAnyRole("ADMIN", "OPERATOR")
                 .requestMatchers(HttpMethod.POST, "/api/v1/departments").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/v1/departments/*").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/departments/*").hasRole("ADMIN")

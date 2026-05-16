@@ -67,6 +67,24 @@ export async function apiDelete(path: string): Promise<void> {
   return parseResponse<void>(response);
 }
 
+export async function apiPostForm<T>(path: string, body: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const auth = getStoredAuth();
+  if (auth?.token) {
+    headers.Authorization = auth.token;
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    body,
+  });
+  return parseResponse<T>(response);
+}
+
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 function buildHeaders(): HeadersInit {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const auth = getStoredAuth();

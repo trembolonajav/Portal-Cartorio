@@ -192,6 +192,9 @@ public class InventoryCommandService {
     public AssetInventoryResponse linkAsset(Long assetId, Long stationId, String performedBy, String reason) {
         Asset asset = requireAsset(assetId);
         Station station = requireStation(stationId);
+        if (asset.getStatus() == com.assetguardian.backend.domain.AssetStatus.DISPOSED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Patrimonio baixado nao pode ser vinculado");
+        }
         if (station.getStatus() == StationStatus.INACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estacao inativa nao pode receber patrimonio");
         }

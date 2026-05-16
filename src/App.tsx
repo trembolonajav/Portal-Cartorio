@@ -1010,7 +1010,7 @@ function TicketDetail({
   );
 }
 
-type ReportKind = "tickets_detailed" | "tickets_by_responsible" | "employees" | "assets_by_responsible" | "assets_without_responsible";
+type ReportKind = "tickets_detailed" | "tickets_by_responsible" | "employees" | "assets_by_responsible" | "assets_detailed_by_department" | "assets_without_responsible";
 type ReportRow = Record<string, string | number | null>;
 
 interface InventoryAssetReport {
@@ -1018,20 +1018,26 @@ interface InventoryAssetReport {
   assetCode: string;
   assetType: string;
   assetDescription: string;
+  serialNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
   assetStatus: string;
   stationCode: string | null;
   stationName: string | null;
   employeeName: string | null;
+  departmentId: string | null;
   departmentName: string | null;
 }
 
 const REPORT_LABELS: Record<ReportKind, string> = {
   tickets_detailed: "Chamados detalhados",
+  assets_detailed_by_department: "Inventario detalhado por departamento",
   tickets_by_responsible: "Chamados por responsável",
   employees: "Funcionários",
   assets_by_responsible: "Patrimônios por responsável",
   assets_without_responsible: "Patrimônios sem responsável",
 };
+
 
 function ReportsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -1072,6 +1078,23 @@ function ReportsPage() {
     () => uniqueBy(tickets.flatMap((ticket) => ticket.atribuidoA ? [ticket.atribuidoA] : []), "id"),
     [tickets],
   );
+
+  const isInventoryReport = reportKind === "assets_by_responsible" || reportKind === "assets_detailed_by_department" || reportKind === "assets_without_responsible";
+
+  const inventoryDepartments = useMemo(
+    () => uniqueBy(assets.flatMap((asset) => asset.departmentId && asset.departmentName ? [{ id: asset.departmentId, name: asset.departmentName }] : []), "id"),
+    [assets],
+  );
+
+  const assetResponsibleOptions = useMemo(
+    () => Array.from(new Set(assets.flatMap((asset) => asset.employeeName ? [asset.employeeName] : []))).sort((a, b) => a.localeCompare(b)),
+    [assets],
+  );
+
+  const departmentFilterOptions = isInventoryReport ? inventoryDepartments : departments;
+  const responsibleFilterOptions: Array<[string, string]> = isInventoryReport
+    ? [["all", "Todos"], ...assetResponsibleOptions.map((name) => [name, name] as [string, string])]
+    : [["all", "Todos"], ...responsibleOptions.map((item) => [item.id, item.nomeCompleto] as [string, string])];
 
   const filteredTickets = useMemo(() => {
     const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
@@ -1137,7 +1160,12 @@ function ReportsPage() {
         }));
     }
 
-    const selectedAssets = assets.filter((asset) => reportKind === "assets_without_responsible" ? !asset.employeeName : true);
+    const filteredAssets = assets.filter((asset) => {
+      if (departmentId !== "all" && asset.departmentId !== departmentId) return false;
+      if (responsible !== "all" && asset.employeeName !== responsible) return false;
+      return true;
+    });
+    const selectedAssets = filteredAssets.filter((asset) => reportKind === "assets_without_responsible" ? !asset.employeeName : true);
     const grouped = new Map<string, { responsavel: string; departamento: string; total: number }>();
     selectedAssets.forEach((asset) => {
       const key = asset.employeeName ?? "Sem responsável";
@@ -1152,6 +1180,23 @@ function ReportsPage() {
         Patrimônios: item.total,
       }));
     }
+    if (reportKind === "assets_detailed_by_department") {
+      return [...selectedAssets]
+        .sort((first, second) => `${first.departmentName ?? ""}${first.employeeName ?? ""}${first.assetCode}`.localeCompare(`${second.departmentName ?? ""}${second.employeeName ?? ""}${second.assetCode}`))
+        .map((asset) => ({
+          Departamento: asset.departmentName ?? "Sem departamento",
+          Responsavel: asset.employeeName ?? "Sem responsavel",
+          Patrimonio: asset.assetCode,
+          Tipo: asset.assetType,
+          Descricao: asset.assetDescription,
+          Modelo: asset.model ?? "",
+          Fabricante: asset.manufacturer ?? "",
+          Serie: asset.serialNumber ?? "",
+          Estacao: asset.stationCode ?? "",
+          Local: asset.stationName ?? "",
+          Status: asset.assetStatus,
+        }));
+    }
     return selectedAssets.map((asset) => ({
       Código: asset.assetCode,
       Tipo: asset.assetType,
@@ -1161,7 +1206,7 @@ function ReportsPage() {
       Local: asset.stationName ?? "",
       Departamento: asset.departmentName ?? "",
     }));
-  }, [reportKind, filteredTickets, employees, assets, departmentId]);
+  }, [reportKind, filteredTickets, employees, assets, departmentId, responsible]);
 
   const columns = rows.length ? Object.keys(rows[0]) : [];
   const filename = REPORT_LABELS[reportKind].toLowerCase().replaceAll(" ", "-").normalize("NFD").replaceAll(/\p{M}/gu, "");
@@ -1173,12 +1218,15 @@ function ReportsPage() {
           <FilterSelect
             label="Relatório"
             value={reportKind}
-            onChange={(value) => setReportKind(value as ReportKind)}
+            onChange={(value) => {
+              setReportKind(value as ReportKind);
+              setResponsible("all");
+            }}
             options={Object.entries(REPORT_LABELS)}
           />
           <FilterSelect label="Status" value={status} onChange={(value) => setStatus(value as TicketStatus | "all")} options={[["all", "Todos"], ...Object.entries(STATUS_LABEL)]} />
-          <FilterSelect label="Departamento" value={departmentId} onChange={setDepartmentId} options={[["all", "Todos"], ...departments.map((department) => [department.id, department.name] as [string, string])]} />
-          <FilterSelect label="Responsável" value={responsible} onChange={setResponsible} options={[["all", "Todos"], ...responsibleOptions.map((item) => [item.id, item.nomeCompleto] as [string, string])]} />
+          <FilterSelect label="Departamento" value={departmentId} onChange={setDepartmentId} options={[["all", "Todos"], ...departmentFilterOptions.map((department) => [department.id, department.name] as [string, string])]} />
+          <FilterSelect label="Responsavel" value={responsible} onChange={setResponsible} options={responsibleFilterOptions} />
           <DateField label="De" value={dateFrom} onChange={setDateFrom} />
           <DateField label="Até" value={dateTo} onChange={setDateTo} />
           <button type="button" onClick={() => exportRows(rows, `${filename}.csv`, "csv")} className="mt-6 h-11 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50">CSV</button>

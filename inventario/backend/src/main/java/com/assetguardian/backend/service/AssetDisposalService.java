@@ -126,7 +126,7 @@ public class AssetDisposalService {
                 h1 { font-size: 24px; margin: 22px 0 8px; }
                 .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 30px; margin: 22px 0; font-size: 13px; }
                 .box { border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; margin: 18px 0; }
-                table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+                table { width: 100%%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
                 th { background: #062449; color: white; text-align: left; padding: 8px; }
                 td { border: 1px solid #d8dee8; padding: 7px; vertical-align: top; }
                 .signatures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; margin-top: 70px; }
@@ -138,7 +138,7 @@ public class AssetDisposalService {
               <button onclick="window.print()">Imprimir / salvar PDF</button>
               <section class="header">
                 <div class="brand">CARTORIO INDIO ARTIAGA</div>
-                <div class="subtitle">4º Tabelionato de Notas</div>
+                <div class="subtitle">4o Tabelionato de Notas</div>
               </section>
               <h1>Termo de Baixa Patrimonial</h1>
               <div class="meta">

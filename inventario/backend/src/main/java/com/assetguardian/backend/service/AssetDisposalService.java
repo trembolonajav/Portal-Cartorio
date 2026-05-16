@@ -30,6 +30,8 @@ import com.assetguardian.backend.repository.AssetDisposalRepository;
 import com.assetguardian.backend.repository.AssetMovementRepository;
 import com.assetguardian.backend.repository.AssetRepository;
 import com.assetguardian.backend.repository.StationResponsibilityRepository;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -111,10 +113,18 @@ public class AssetDisposalService {
         return fullTermHtml(disposal, items);
     }
 
+    public byte[] termPdf(Long id) {
+        return renderPdf(termHtml(id));
+    }
+
     public String signatureSheetHtml(Long id) {
         AssetDisposal disposal = requireDisposal(id);
         List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id);
         return signatureSheetHtml(disposal, items);
+    }
+
+    public byte[] signatureSheetPdf(Long id) {
+        return renderPdf(signatureSheetHtml(id));
     }
 
     public AssetDisposalResponse uploadSignedTerm(Long id, MultipartFile file, String username) {
@@ -310,6 +320,27 @@ public class AssetDisposalService {
                 </table>
               </section>
             """);
+        if (items.size() <= 10) {
+            html.append("""
+              <section class="section signature-section">
+                <h2>7. Aprovacao e assinaturas</h2>
+                <p>Diante das informacoes constantes neste termo e dos registros vinculados no Sistema de Inventario Patrimonial, fica recomendada e autorizada a baixa patrimonial do(s) bem(ns) relacionado(s), com manutencao do historico para controle interno e rastreabilidade.</p>
+                <div class="signatures four">
+                  <div class="signature">Responsavel pela conferencia patrimonial<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                  <div class="signature">Responsavel de TI / Inventario<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                  <div class="signature">Gestor administrativo / Autorizador<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                  <div class="signature">Tabeliao/Substituto, se aplicavel<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
+                </div>
+              </section>
+            """);
+        } else {
+            html.append("""
+              <section class="section">
+                <h2>7. Assinatura para lote grande</h2>
+                <div class="box"><p>Esta baixa contem muitos bens. Para evitar impressao desnecessaria, a aprovacao fisica deve ser colhida na folha-resumo de assinatura vinculada a este termo completo digital.</p></div>
+              </section>
+            """);
+        }
         html.append(documentEnd());
         return html.toString();
     }
@@ -462,7 +493,6 @@ public class AssetDisposalService {
 
     private String documentStart(String title) {
         return """
-            <!doctype html>
             <html lang="pt-BR">
             <head>
               <meta charset="utf-8" />
@@ -470,41 +500,35 @@ public class AssetDisposalService {
               </title>
               <style>
                 * { box-sizing: border-box; }
-                body { font-family: Arial, sans-serif; color: #061a38; margin: 0; background: #f3f6fa; }
-                button { position: fixed; right: 24px; top: 18px; z-index: 10; border: 0; border-radius: 6px; background: #062449; color: white; padding: 10px 14px; font-weight: 700; cursor: pointer; }
-                .cover, .page, .signature-page { width: 210mm; min-height: 297mm; margin: 0 auto 16px; background: white; padding: 28mm 20mm; box-shadow: 0 12px 30px rgba(15, 23, 42, .12); page-break-after: always; }
-                .cover { display: flex; flex-direction: column; justify-content: center; border-top: 12px solid #062449; border-bottom: 12px solid #d5a84f; }
+                @page { size: A4; margin: 13mm 13mm 15mm 13mm; @bottom-center { content: "Documento gerado automaticamente pelo Sistema de Inventario Patrimonial"; font-size: 9px; color: #657286; } }
+                body { font-family: Arial, sans-serif; color: #061a38; margin: 0; background: white; font-size: 12px; }
+                .cover, .page, .section, .signature-page { background: white; margin: 0 0 12px; page-break-inside: avoid; break-inside: avoid; }
+                .cover { padding: 22px 24px; border-top: 10px solid #062449; border-bottom: 6px solid #d5a84f; margin-bottom: 18px; }
                 .model-label { color: #d5a84f; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
-                h1 { font-size: 34px; line-height: 1.1; margin: 0 0 12px; color: #061a38; }
-                h2 { font-size: 21px; margin: 0 0 16px; color: #061a38; }
-                h3 { font-size: 15px; margin: 18px 0 8px; color: #061a38; }
-                p { font-size: 13px; line-height: 1.58; }
-                .cover-subtitle { color: #5f6b7a; font-size: 15px; max-width: 680px; }
-                .cover-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 28px; }
+                h1 { font-size: 28px; line-height: 1.1; margin: 0 0 8px; color: #061a38; }
+                h2 { font-size: 17px; margin: 13px 0 8px; color: #061a38; }
+                h3 { font-size: 13px; margin: 12px 0 6px; color: #061a38; }
+                p { font-size: 11.5px; line-height: 1.42; margin: 5px 0; }
+                .cover-subtitle { color: #5f6b7a; font-size: 13px; max-width: 680px; }
+                .cover-grid { margin-top: 16px; }
                 .cover-grid.compact { margin-top: 18px; }
-                .meta-card, .stat { border: 1px solid #d8dee8; border-radius: 8px; padding: 12px; background: #fbfcfe; }
+                .meta-card, .stat { display: inline-block; vertical-align: top; width: 48%; border: 1px solid #d8dee8; border-radius: 6px; padding: 8px; background: #fbfcfe; margin: 0 1% 8px 0; }
                 .meta-label, .stat-label { font-size: 10px; color: #7a8797; text-transform: uppercase; letter-spacing: .08em; }
-                .meta-value, .stat-value { margin-top: 5px; font-size: 14px; font-weight: 700; }
-                .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
-                .box { border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; margin: 12px 0; background: #fbfcfe; }
+                .meta-value, .stat-value { margin-top: 4px; font-size: 12px; font-weight: 700; }
+                .summary-grid { margin-bottom: 10px; }
+                .summary-grid .stat { width: 23.5%; }
+                .box { border: 1px solid #d8dee8; border-radius: 6px; padding: 9px; margin: 8px 0; background: #fbfcfe; }
                 .declaration { border-left: 4px solid #d5a84f; }
                 .muted { color: #657286; font-size: 12px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
-                th { background: #062449; color: white; text-align: left; padding: 8px; }
-                td { border: 1px solid #d8dee8; padding: 7px; vertical-align: top; }
+                table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 9.5px; page-break-inside: avoid; break-inside: avoid; }
+                th { background: #062449; color: white; text-align: left; padding: 5px; }
+                td { border: 1px solid #d8dee8; padding: 5px; vertical-align: top; }
                 .info-table th { width: 32%; background: #f2f5f9; color: #061a38; }
-                .signatures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 38px; margin-top: 58px; }
-                .signatures.four { grid-template-columns: repeat(2, 1fr); gap: 48px 38px; }
-                .signature { border-top: 1px solid #061a38; padding-top: 8px; min-height: 90px; font-size: 12px; line-height: 1.8; }
-                @media print {
-                  body { background: white; }
-                  button { display: none; }
-                  .cover, .page, .signature-page { margin: 0; box-shadow: none; }
-                }
+                .signatures { margin-top: 36px; page-break-inside: avoid; break-inside: avoid; }
+                .signature { display: inline-block; vertical-align: top; width: 47%; border-top: 1px solid #061a38; padding-top: 7px; min-height: 72px; font-size: 10.5px; line-height: 1.6; margin: 0 2% 28px 0; }
               </style>
             </head>
             <body>
-              <button onclick="window.print()">Imprimir / salvar PDF</button>
             """;
     }
 
@@ -513,6 +537,24 @@ public class AssetDisposalService {
             </body>
             </html>
             """;
+    }
+
+    private byte[] renderPdf(String html) {
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            String normalized = html.stripLeading();
+            int htmlStart = normalized.indexOf("<html");
+            if (htmlStart > 0) {
+                normalized = normalized.substring(htmlStart);
+            }
+            builder.withHtmlContent(normalized, null);
+            builder.toStream(output);
+            builder.run();
+            return output.toByteArray();
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Falha ao gerar PDF da baixa patrimonial");
+        }
     }
 
     private void meta(StringBuilder builder, String label, String value) {

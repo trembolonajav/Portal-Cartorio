@@ -47,17 +47,19 @@ public class AssetDisposalController {
     }
 
     @GetMapping("/{id}/term")
-    public ResponseEntity<String> term(@PathVariable Long id) {
+    public ResponseEntity<byte[]> term(@PathVariable Long id) {
         return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
-            .body(service.termHtml(id));
+            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+            .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=termo-baixa-" + id + ".pdf")
+            .body(service.termPdf(id));
     }
 
     @GetMapping("/{id}/signature-sheet")
-    public ResponseEntity<String> signatureSheet(@PathVariable Long id) {
+    public ResponseEntity<byte[]> signatureSheet(@PathVariable Long id) {
         return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
-            .body(service.signatureSheetHtml(id));
+            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+            .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=folha-assinatura-baixa-" + id + ".pdf")
+            .body(service.signatureSheetPdf(id));
     }
 
     @PostMapping(path = "/{id}/upload-signed-term", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

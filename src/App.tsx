@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
+  BarChart3,
   Bell,
   CalendarDays,
   CheckCircle2,
@@ -44,7 +45,7 @@ import {
   type TicketStatus,
 } from "@/lib/api";
 
-type View = "dashboard" | "chamados" | "usuarios" | "setores" | "configuracoes";
+type View = "dashboard" | "chamados" | "usuarios" | "setores" | "configuracoes" | "relatorios";
 type TabKey = "todos" | "sem_responsavel" | "meus" | "atrasados" | "aguardando";
 
 const NAV_ITEMS: Array<{
@@ -56,6 +57,7 @@ const NAV_ITEMS: Array<{
 }> = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "chamados", label: "Chamados", icon: TicketIcon },
+  { key: "relatorios", label: "Relatórios", icon: BarChart3 },
   { key: "inventario", label: "Inventário", icon: Package, externalUrl: "http://localhost:8082" },
   { key: "usuarios", label: "Funcionarios", icon: Users },
   { key: "setores", label: "Departamentos", icon: Grid2X2 },
@@ -65,6 +67,7 @@ const NAV_ITEMS: Array<{
 const VIEW_TITLES: Record<View, string> = {
   dashboard: "Dashboard",
   chamados: "Gestão de Chamados",
+  relatorios: "Relatórios",
   usuarios: "Funcionarios",
   setores: "Departamentos",
   configuracoes: "Configurações",
@@ -229,7 +232,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [selectedTicket, setSelectedTicket] = useState<number | null>(null);
   const [globalTicketSearch, setGlobalTicketSearch] = useState("");
   const allowedNavItems = NAV_ITEMS.filter((item) => {
-    if (item.key === "dashboard" || item.key === "usuarios" || item.key === "setores" || item.key === "configuracoes") return canAdmin(user);
+    if (item.key === "dashboard" || item.key === "usuarios" || item.key === "setores" || item.key === "configuracoes" || item.key === "relatorios") return canAdmin(user);
     if (item.key === "inventario") return canOperate(user);
     return true;
   });
@@ -345,6 +348,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
               onGlobalQueryChange={setGlobalTicketSearch}
             />
           )}
+          {view === "relatorios" && canAdmin(user) && <ReportsPage />}
           {(view === "configuracoes" || view === "setores" || view === "usuarios") && canAdmin(user) && <ConfigPage view={view} />}
         </main>
       </div>
@@ -1006,6 +1010,211 @@ function TicketDetail({
   );
 }
 
+type ReportKind = "tickets_detailed" | "tickets_by_responsible" | "employees" | "assets_by_responsible" | "assets_without_responsible";
+type ReportRow = Record<string, string | number | null>;
+
+interface InventoryAssetReport {
+  assetId: number;
+  assetCode: string;
+  assetType: string;
+  assetDescription: string;
+  assetStatus: string;
+  stationCode: string | null;
+  stationName: string | null;
+  employeeName: string | null;
+  departmentName: string | null;
+}
+
+const REPORT_LABELS: Record<ReportKind, string> = {
+  tickets_detailed: "Chamados detalhados",
+  tickets_by_responsible: "Chamados por responsável",
+  employees: "Funcionários",
+  assets_by_responsible: "Patrimônios por responsável",
+  assets_without_responsible: "Patrimônios sem responsável",
+};
+
+function ReportsPage() {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [assets, setAssets] = useState<InventoryAssetReport[]>([]);
+  const [reportKind, setReportKind] = useState<ReportKind>("tickets_detailed");
+  const [status, setStatus] = useState<TicketStatus | "all">("all");
+  const [departmentId, setDepartmentId] = useState("all");
+  const [responsible, setResponsible] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = getSharedAuthToken();
+    Promise.all([
+      api<Ticket[]>("/tickets"),
+      api<Employee[]>("/employees"),
+      token
+        ? fetch("http://localhost:8083/api/v1/assets-flat", { headers: { Authorization: token } }).then((response) => response.ok ? response.json() : [])
+        : Promise.resolve([]),
+    ])
+      .then(([nextTickets, nextEmployees, nextAssets]) => {
+        setTickets(nextTickets);
+        setEmployees(nextEmployees);
+        setAssets(nextAssets as InventoryAssetReport[]);
+      })
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Falha ao carregar relatórios"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const departments = useMemo(
+    () => uniqueBy(employees.flatMap((employee) => employee.department ? [employee.department] : []), "id"),
+    [employees],
+  );
+
+  const responsibleOptions = useMemo(
+    () => uniqueBy(tickets.flatMap((ticket) => ticket.atribuidoA ? [ticket.atribuidoA] : []), "id"),
+    [tickets],
+  );
+
+  const filteredTickets = useMemo(() => {
+    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+    const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
+    return tickets.filter((ticket) => {
+      if (status !== "all" && ticket.status !== status) return false;
+      if (responsible !== "all" && ticket.atribuidoA?.id !== responsible) return false;
+      if (departmentId !== "all" && ticket.criadoPor.employee?.department?.id !== departmentId) return false;
+      if (from && new Date(ticket.createdAt) < from) return false;
+      if (to && new Date(ticket.createdAt) > to) return false;
+      return true;
+    });
+  }, [tickets, status, responsible, departmentId, dateFrom, dateTo]);
+
+  const rows = useMemo<ReportRow[]>(() => {
+    if (reportKind === "tickets_detailed") {
+      return filteredTickets.map((ticket) => ({
+        Número: ticket.numero,
+        Título: ticket.titulo,
+        Status: STATUS_LABEL[ticket.status],
+        Prioridade: PRIORITY_LABEL[ticket.prioridade],
+        Setor: ticket.setor?.nome ?? "",
+        Categoria: ticket.categoria?.nome ?? "",
+        Solicitante: ticket.criadoPor.nomeCompleto,
+        Responsável: ticket.atribuidoA?.nomeCompleto ?? "",
+        Aberto_em: formatDateTime(ticket.createdAt),
+        Prazo: formatDateTime(ticket.prazo),
+        Resolvido_em: formatDateTime(ticket.resolvidoEm),
+      }));
+    }
+
+    if (reportKind === "tickets_by_responsible") {
+      const groups = new Map<string, { nome: string; total: number; resolvidos: number; pendentes: number; atrasados: number }>();
+      filteredTickets.forEach((ticket) => {
+        const key = ticket.atribuidoA?.id ?? "sem-responsavel";
+        const current = groups.get(key) ?? { nome: ticket.atribuidoA?.nomeCompleto ?? "Sem responsável", total: 0, resolvidos: 0, pendentes: 0, atrasados: 0 };
+        current.total++;
+        if (ticket.status === "resolvido") current.resolvidos++;
+        if (ticket.status !== "resolvido") current.pendentes++;
+        if (isAtrasado(ticket)) current.atrasados++;
+        groups.set(key, current);
+      });
+      return Array.from(groups.values()).map((item) => ({
+        Responsável: item.nome,
+        Total: item.total,
+        Resolvidos: item.resolvidos,
+        Pendentes: item.pendentes,
+        Atrasados: item.atrasados,
+      }));
+    }
+
+    if (reportKind === "employees") {
+      return employees
+        .filter((employee) => departmentId === "all" || employee.department?.id === departmentId)
+        .map((employee) => ({
+          Nome: employee.fullName,
+          Usuário: employee.username ?? "",
+          Email: employee.email ?? "",
+          CPF: employee.cpf ?? "",
+          Departamento: employee.department?.name ?? "",
+          Status: employee.status === "ACTIVE" ? "Ativo" : "Inativo",
+          Papel: ROLE_LABEL[employee.role ?? "usuario"],
+        }));
+    }
+
+    const selectedAssets = assets.filter((asset) => reportKind === "assets_without_responsible" ? !asset.employeeName : true);
+    const grouped = new Map<string, { responsavel: string; departamento: string; total: number }>();
+    selectedAssets.forEach((asset) => {
+      const key = asset.employeeName ?? "Sem responsável";
+      const current = grouped.get(key) ?? { responsavel: key, departamento: asset.departmentName ?? "", total: 0 };
+      current.total++;
+      grouped.set(key, current);
+    });
+    if (reportKind === "assets_by_responsible") {
+      return Array.from(grouped.values()).map((item) => ({
+        Responsável: item.responsavel,
+        Departamento: item.departamento,
+        Patrimônios: item.total,
+      }));
+    }
+    return selectedAssets.map((asset) => ({
+      Código: asset.assetCode,
+      Tipo: asset.assetType,
+      Descrição: asset.assetDescription,
+      Status: asset.assetStatus,
+      Estação: asset.stationCode ?? "",
+      Local: asset.stationName ?? "",
+      Departamento: asset.departmentName ?? "",
+    }));
+  }, [reportKind, filteredTickets, employees, assets, departmentId]);
+
+  const columns = rows.length ? Object.keys(rows[0]) : [];
+  const filename = REPORT_LABELS[reportKind].toLowerCase().replaceAll(" ", "-").normalize("NFD").replaceAll(/\p{M}/gu, "");
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr_0.9fr_0.9fr_0.75fr_0.75fr_auto_auto]">
+          <FilterSelect
+            label="Relatório"
+            value={reportKind}
+            onChange={(value) => setReportKind(value as ReportKind)}
+            options={Object.entries(REPORT_LABELS)}
+          />
+          <FilterSelect label="Status" value={status} onChange={(value) => setStatus(value as TicketStatus | "all")} options={[["all", "Todos"], ...Object.entries(STATUS_LABEL)]} />
+          <FilterSelect label="Departamento" value={departmentId} onChange={setDepartmentId} options={[["all", "Todos"], ...departments.map((department) => [department.id, department.name] as [string, string])]} />
+          <FilterSelect label="Responsável" value={responsible} onChange={setResponsible} options={[["all", "Todos"], ...responsibleOptions.map((item) => [item.id, item.nomeCompleto] as [string, string])]} />
+          <DateField label="De" value={dateFrom} onChange={setDateFrom} />
+          <DateField label="Até" value={dateTo} onChange={setDateTo} />
+          <button type="button" onClick={() => exportRows(rows, `${filename}.csv`, "csv")} className="mt-6 h-11 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50">CSV</button>
+          <button type="button" onClick={() => exportRows(rows, `${filename}.xls`, "xls")} className="mt-6 h-11 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white">Excel</button>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <header className="flex items-center justify-between border-b border-slate-200 p-5">
+          <div>
+            <h3 className="font-semibold">{REPORT_LABELS[reportKind]}</h3>
+            <p className="mt-1 text-sm text-slate-500">{loading ? "Carregando..." : `${rows.length} registro(s) encontrado(s)`}</p>
+          </div>
+        </header>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="bg-slate-50 text-left text-slate-600">
+              <tr>{columns.map((column) => <th key={column} className="px-5 py-3 font-medium">{column}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.slice(0, 100).map((row, index) => (
+                <tr key={index} className="hover:bg-slate-50">
+                  {columns.map((column) => <td key={column} className="px-5 py-3">{row[column] ?? ""}</td>)}
+                </tr>
+              ))}
+              {!rows.length && (
+                <tr><td colSpan={Math.max(columns.length, 1)} className="px-5 py-12 text-center text-slate-500">Nenhum registro para os filtros selecionados.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ConfigPage({ view }: { view: View }) {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -1331,6 +1540,46 @@ function AdminList({
       ))}
     </ul>
   );
+}
+
+function exportRows(rows: ReportRow[], filename: string, format: "csv" | "xls") {
+  if (!rows.length) {
+    toast.error("Não há dados para exportar.");
+    return;
+  }
+  const columns = Object.keys(rows[0]);
+  const escapeCell = (value: string | number | null | undefined) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+
+  if (format === "csv") {
+    const csv = [
+      columns.map(escapeCell).join(";"),
+      ...rows.map((row) => columns.map((column) => escapeCell(row[column])).join(";")),
+    ].join("\r\n");
+    downloadBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), filename);
+    return;
+  }
+
+  const table = `<table><thead><tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(row[column] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  downloadBlob(new Blob([`\uFEFF${table}`], { type: "application/vnd.ms-excel;charset=utf-8" }), filename);
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value: string | number | null) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function getSharedAuthToken() {

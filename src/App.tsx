@@ -227,6 +227,7 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [view, setView] = useState<View>("chamados");
   const [selectedTicket, setSelectedTicket] = useState<number | null>(null);
+  const [globalTicketSearch, setGlobalTicketSearch] = useState("");
   const allowedNavItems = NAV_ITEMS.filter((item) => {
     if (item.key === "dashboard" || item.key === "usuarios" || item.key === "setores" || item.key === "configuracoes") return canAdmin(user);
     if (item.key === "inventario") return canOperate(user);
@@ -250,7 +251,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
                   window.location.href = item.externalUrl;
                   return;
                 }
-                setView(item.key as View);
+                const nextView = item.key as View;
+                if (view === nextView) {
+                  if (nextView === "chamados") setSelectedTicket(null);
+                  return;
+                }
+                setSelectedTicket(null);
+                setView(nextView);
               }}
               className={`flex h-12 w-full items-center gap-3 rounded-lg px-4 text-left text-[15px] transition ${
                 view === item.key && !item.externalUrl
@@ -285,6 +292,12 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
             <div className="relative hidden lg:block">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
+                value={globalTicketSearch}
+                onChange={(event) => {
+                  setGlobalTicketSearch(event.target.value);
+                  setSelectedTicket(null);
+                  if (event.target.value.trim() && view !== "chamados") setView("chamados");
+                }}
                 className="h-12 w-72 rounded-lg border border-slate-200 bg-white pl-12 pr-4 text-sm outline-none focus:border-[#062449]"
                 placeholder="Buscar chamado..."
               />
@@ -324,7 +337,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
             />
           )}
           {view === "chamados" && (
-            <TicketsPage user={user} selected={selectedTicket} onSelect={setSelectedTicket} />
+            <TicketsPage
+              user={user}
+              selected={selectedTicket}
+              onSelect={setSelectedTicket}
+              globalQuery={globalTicketSearch}
+              onGlobalQueryChange={setGlobalTicketSearch}
+            />
           )}
           {(view === "configuracoes" || view === "setores" || view === "usuarios") && canAdmin(user) && <ConfigPage view={view} />}
         </main>
@@ -386,10 +405,14 @@ function TicketsPage({
   user,
   selected,
   onSelect,
+  globalQuery,
+  onGlobalQueryChange,
 }: {
   user: AuthUser;
   selected: number | null;
   onSelect: (numero: number | null) => void;
+  globalQuery: string;
+  onGlobalQueryChange: (value: string) => void;
 }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -452,7 +475,9 @@ function TicketsPage({
   );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const searchTerms = [query, globalQuery]
+      .flatMap((value) => value.trim().toLowerCase().split(/\s+/))
+      .filter(Boolean);
     const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
     const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
 
@@ -468,16 +493,19 @@ function TicketsPage({
       if (responsavelId !== "all" && ticket.atribuidoA?.id !== responsavelId) return false;
       if (from && new Date(ticket.createdAt) < from) return false;
       if (to && new Date(ticket.createdAt) > to) return false;
-      if (!q) return true;
-      return (
-        ticket.titulo.toLowerCase().includes(q) ||
-        ticket.descricao.toLowerCase().includes(q) ||
-        String(ticket.numero).includes(q) ||
-        ticket.criadoPor.nomeCompleto.toLowerCase().includes(q) ||
-        (ticket.atribuidoA?.nomeCompleto.toLowerCase().includes(q) ?? false)
-      );
+      if (!searchTerms.length) return true;
+      const searchable = [
+        ticket.titulo,
+        ticket.descricao,
+        String(ticket.numero),
+        ticket.criadoPor.nomeCompleto,
+        ticket.atribuidoA?.nomeCompleto ?? "",
+        ticket.setor?.nome ?? "",
+        ticket.categoria?.nome ?? "",
+      ].join(" ").toLowerCase();
+      return searchTerms.every((term) => searchable.includes(term));
     });
-  }, [visibleTickets, tab, status, priority, setorId, responsavelId, dateFrom, dateTo, query, user.id, isStaff]);
+  }, [visibleTickets, tab, status, priority, setorId, responsavelId, dateFrom, dateTo, query, globalQuery, user.id, isStaff]);
 
   const selectedTicket = tickets.find((ticket) => ticket.numero === selected && (isStaff || ticket.criadoPor.id === user.id)) ?? null;
   if (selectedTicket) {
@@ -493,6 +521,7 @@ function TicketsPage({
 
   function clearFilters() {
     setQuery("");
+    onGlobalQueryChange("");
     setStatus("all");
     setPriority("all");
     setSetorId("all");
@@ -517,7 +546,7 @@ function TicketsPage({
         </button>
       </div>
 
-      <StatsRow stats={stats} tickets={tickets} />
+      {isStaff ? <StatsRow stats={stats} tickets={tickets} /> : <EmployeeStatsRow tickets={visibleTickets} />}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className={`grid gap-5 ${isStaff ? "xl:grid-cols-[1.7fr_0.75fr_0.8fr_0.8fr_0.8fr_0.85fr_0.85fr_auto]" : "xl:grid-cols-[1.7fr_0.8fr_0.8fr_0.8fr_0.85fr_0.85fr_auto]"}`}>
@@ -1115,8 +1144,8 @@ function ConfigPage({ view }: { view: View }) {
     }
   }
 
-  const showDepartments = view === "setores" || view === "configuracoes";
-  const showEmployees = view === "usuarios" || view === "configuracoes";
+  const showDepartments = view === "setores";
+  const showEmployees = view === "usuarios";
 
   return (
     <div className="space-y-6">
@@ -1225,14 +1254,26 @@ function ConfigPage({ view }: { view: View }) {
       )}
 
       {view === "configuracoes" && (
-        <ListCard
-          title="Categorias de chamado"
-          items={categorias.map((categoria) => ({
-            id: categoria.id,
-            label: categoria.nome,
-            active: categoria.ativo,
-          }))}
-        />
+        <div className="grid gap-6 xl:grid-cols-2">
+          <ListCard
+            title="Categorias de chamado"
+            items={categorias.map((categoria) => ({
+              id: categoria.id,
+              label: categoria.nome,
+              active: categoria.ativo,
+            }))}
+          />
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <header className="border-b border-slate-200 p-5">
+              <h3 className="font-semibold">Parâmetros do sistema</h3>
+            </header>
+            <div className="space-y-4 p-5 text-sm text-slate-600">
+              <Info label="Prazo padrão de novo chamado" value="2 dias" />
+              <Info label="Senha inicial de funcionário" value="123456" />
+              <Info label="Acesso ao inventário" value="Operador e administrador" />
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

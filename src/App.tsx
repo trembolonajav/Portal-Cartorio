@@ -350,7 +350,7 @@ function Dashboard({ onOpenTicket }: { onOpenTicket: (numero: number) => void })
   return (
     <div className="space-y-7">
       <p className="text-lg text-slate-600">Resumo operacional com dados vindos do backend Java.</p>
-      <StatsRow stats={stats} tickets={tickets} />
+      {isStaff && <StatsRow stats={stats} tickets={tickets} />}
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 className="font-semibold">Chamados atrasados</h2>
@@ -403,6 +403,10 @@ function TicketsPage({
   const [tab, setTab] = useState<TabKey>("todos");
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const isStaff = canOperate(user);
+  const visibleTickets = useMemo(
+    () => tickets.filter((ticket) => isStaff || ticket.criadoPor.id === user.id),
+    [tickets, isStaff, user.id],
+  );
 
   async function load() {
     const [ticketData, statData] = await Promise.all([
@@ -420,31 +424,31 @@ function TicketsPage({
   const setores = useMemo(
     () =>
       uniqueBy(
-        tickets.flatMap((ticket) => (ticket.setor ? [ticket.setor] : [])),
+        visibleTickets.flatMap((ticket) => (ticket.setor ? [ticket.setor] : [])),
         "id",
       ),
-    [tickets],
+    [visibleTickets],
   );
   const responsaveis = useMemo(
     () =>
       uniqueBy(
-        tickets.flatMap((ticket) => (ticket.atribuidoA ? [ticket.atribuidoA] : [])),
+        visibleTickets.flatMap((ticket) => (ticket.atribuidoA ? [ticket.atribuidoA] : [])),
         "id",
       ),
-    [tickets],
+    [visibleTickets],
   );
 
   const tabCounts = useMemo(
     () => ({
-      todos: tickets.filter((ticket) => isStaff || ticket.criadoPor.id === user.id).length,
-      sem_responsavel: tickets.filter(
+      todos: visibleTickets.length,
+      sem_responsavel: visibleTickets.filter(
         (ticket) => !ticket.atribuidoA && ticket.status !== "resolvido",
       ).length,
-      meus: tickets.filter((ticket) => ticket.atribuidoA?.id === user.id).length,
-      atrasados: tickets.filter(isAtrasado).length,
-      aguardando: tickets.filter((ticket) => ticket.status === "aguardando_solicitante").length,
+      meus: visibleTickets.filter((ticket) => isStaff ? ticket.atribuidoA?.id === user.id : ticket.criadoPor.id === user.id).length,
+      atrasados: visibleTickets.filter(isAtrasado).length,
+      aguardando: visibleTickets.filter((ticket) => ticket.status === "aguardando_solicitante").length,
     }),
-    [tickets, user.id, isStaff],
+    [visibleTickets, user.id, isStaff],
   );
 
   const filtered = useMemo(() => {
@@ -452,8 +456,7 @@ function TicketsPage({
     const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
     const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
 
-    return tickets.filter((ticket) => {
-      if (!isStaff && ticket.criadoPor.id !== user.id) return false;
+    return visibleTickets.filter((ticket) => {
       if (tab === "sem_responsavel" && (ticket.atribuidoA || ticket.status === "resolvido"))
         return false;
       if (tab === "meus" && (isStaff ? ticket.atribuidoA?.id !== user.id : ticket.criadoPor.id !== user.id)) return false;
@@ -474,7 +477,7 @@ function TicketsPage({
         (ticket.atribuidoA?.nomeCompleto.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [tickets, tab, status, priority, setorId, responsavelId, dateFrom, dateTo, query, user.id, isStaff]);
+  }, [visibleTickets, tab, status, priority, setorId, responsavelId, dateFrom, dateTo, query, user.id, isStaff]);
 
   const selectedTicket = tickets.find((ticket) => ticket.numero === selected && (isStaff || ticket.criadoPor.id === user.id)) ?? null;
   if (selectedTicket) {
@@ -503,7 +506,7 @@ function TicketsPage({
     <div className="space-y-7">
       <div className="flex items-center justify-between gap-4">
         <p className="text-lg text-slate-600">
-          Acompanhe solicitações internas, prazos, responsáveis e status de atendimento.
+          {isStaff ? "Acompanhe solicitações internas, prazos, responsáveis e status de atendimento." : "Abra chamados e acompanhe o andamento das suas solicitações."}
         </p>
         <button
           onClick={() => setNewTicketOpen(true)}
@@ -517,7 +520,7 @@ function TicketsPage({
       <StatsRow stats={stats} tickets={tickets} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-5 xl:grid-cols-[1.7fr_0.75fr_0.8fr_0.8fr_0.8fr_0.85fr_0.85fr_auto]">
+        <div className={`grid gap-5 ${isStaff ? "xl:grid-cols-[1.7fr_0.75fr_0.8fr_0.8fr_0.8fr_0.85fr_0.85fr_auto]" : "xl:grid-cols-[1.7fr_0.8fr_0.8fr_0.8fr_0.85fr_0.85fr_auto]"}`}>
           <FilterSearch value={query} onChange={setQuery} />
           <FilterSelect
             label="Status"
@@ -540,17 +543,19 @@ function TicketsPage({
               ...setores.map((setor) => [setor.id, setor.nome] as [string, string]),
             ]}
           />
-          <FilterSelect
-            label="Responsável"
-            value={responsavelId}
-            onChange={setResponsavelId}
-            options={[
-              ["all", "Todos"],
-              ...responsaveis.map(
-                (responsavel) => [responsavel.id, responsavel.nomeCompleto] as [string, string],
-              ),
-            ]}
-          />
+          {isStaff && (
+            <FilterSelect
+              label="Responsável"
+              value={responsavelId}
+              onChange={setResponsavelId}
+              options={[
+                ["all", "Todos"],
+                ...responsaveis.map(
+                  (responsavel) => [responsavel.id, responsavel.nomeCompleto] as [string, string],
+                ),
+              ]}
+            />
+          )}
           <DateField label="De" value={dateFrom} onChange={setDateFrom} />
           <DateField label="Até" value={dateTo} onChange={setDateTo} />
           <button
@@ -568,7 +573,7 @@ function TicketsPage({
           <div className="flex gap-8 overflow-x-auto">
             <Tab
               active={tab === "todos"}
-              label="Todos"
+              label={isStaff ? "Todos" : "Meus chamados"}
               count={tabCounts.todos}
               onClick={() => setTab("todos")}
             />
@@ -580,12 +585,14 @@ function TicketsPage({
               onClick={() => setTab("sem_responsavel")}
             />
             )}
-            <Tab
-              active={tab === "meus"}
-              label="Meus chamados"
-              count={tabCounts.meus}
-              onClick={() => setTab("meus")}
-            />
+            {isStaff && (
+              <Tab
+                active={tab === "meus"}
+                label="Meus chamados"
+                count={tabCounts.meus}
+                onClick={() => setTab("meus")}
+              />
+            )}
             {isStaff && (
             <Tab
               active={tab === "atrasados"}

@@ -109,8 +109,10 @@ public class DataSeeder implements CommandLineRunner {
     comment(50, t9, admin, "Preciso que o financeiro confirme se o acesso será apenas leitura.", false, hours(-5));
     comment(51, t10, juliana, "A lentidão parece concentrada em pesquisas com anexos. Vou abrir análise de índice no banco.", true, hours(-2));
     comment(52, t11, admin, "Solicitação marcada como alta por risco operacional no rack principal.", true, days(-3));
-    comment(53, t12, marina, "Modelo atualizado e publicado para a equipe de escrituras.", false, days(-1));
     syncEmployeeAccounts();
+    mockRobsonTickets(sistema, equipamento, atendimento, notas);
+
+    comment(53, t12, marina, "Modelo atualizado e publicado para a equipe de escrituras.", false, days(-1));
   }
 
   private UserAccount user(int id, String username, String nome, String email, Set<AppRole> roles) {
@@ -136,11 +138,6 @@ public class DataSeeder implements CommandLineRunner {
   }
 
   private void syncEmployeeAccounts() {
-    users.findAll().forEach(user -> {
-      user.setPassword("123456");
-      users.save(user);
-    });
-
     employees.findAll().forEach(employee -> {
       if (employee.getStatus() != EmployeeStatus.ACTIVE) return;
       Optional<UserAccount> existing = users.findByEmployeeId(employee.getId());
@@ -150,6 +147,17 @@ public class DataSeeder implements CommandLineRunner {
       UserAccount account = new UserAccount(UUID.randomUUID(), username, employee.getFullName(), email, "123456", Set.of(AppRole.usuario));
       account.setEmployee(employee);
       users.save(account);
+    });
+  }
+
+  private void mockRobsonTickets(Categoria sistema, Categoria equipamento, Setor atendimento, Setor notas) {
+    users.findByUsername("robson-ferreira-ramos").ifPresent(robson -> {
+      Ticket r1 = ticket(101, 2001, "Computador da estação Rec-Robson travando", "O computador está travando ao abrir o sistema de reconhecimento de firma e precisa ser reiniciado algumas vezes durante o atendimento.", TicketStatus.aberto, TicketPriority.alta, robson, null, sistema, atendimento, hours(10), hours(-5), hours(-5), null);
+      Ticket r2 = ticket(102, 2002, "Impressora não imprime etiqueta de autenticação", "As etiquetas saem em branco na primeira tentativa e só imprimem depois de reiniciar a impressora.", TicketStatus.em_andamento, TicketPriority.media, robson, users.findByUsername("marina-c").orElse(null), equipamento, atendimento, days(1), days(-2), hours(-3), null);
+      Ticket r3 = ticket(103, 2003, "Solicitar acesso ao relatório de atendimentos", "Preciso visualizar o relatório de atendimentos do meu balcão para conferir os protocolos finalizados no dia.", TicketStatus.aguardando_solicitante, TicketPriority.baixa, robson, users.findByUsername("admin").orElse(null), sistema, notas, days(3), days(-4), days(-1), null);
+      comment(101, r1, robson, "O travamento ocorreu novamente durante a manhã.", false, hours(-4));
+      comment(102, r2, robson, "Enviei um exemplo da etiqueta que saiu em branco.", false, days(-1));
+      comment(103, r3, robson, "O acesso pode ser somente leitura.", false, days(-3));
     });
   }
 

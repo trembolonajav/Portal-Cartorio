@@ -156,8 +156,8 @@ public class ApiController {
     UserAccount autor = request.autorId() == null
       ? users.findByUsername("admin").orElseThrow()
       : users.findById(request.autorId()).orElseThrow();
-    if (isBlank(request.causa()) || isBlank(request.acaoRealizada()) || isBlank(request.solucao()) || isBlank(request.observacaoSolicitante())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Causa, acao realizada, solucao e observacao ao solicitante sao obrigatorias");
+    if (isBlank(request.causa()) || isBlank(request.acaoRealizada())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Causa identificada e acao realizada sao obrigatorias");
     }
     if (ticket.getAtribuidoA() == null) {
       ticket.setAtribuidoA(autor);
@@ -170,11 +170,7 @@ public class ApiController {
       Causa identificada: %s
 
       Acao realizada: %s
-
-      Solucao aplicada: %s
-
-      Observacao ao solicitante: %s
-      """.formatted(request.causa().trim(), request.acaoRealizada().trim(), request.solucao().trim(), request.observacaoSolicitante().trim());
+      """.formatted(request.causa().trim(), request.acaoRealizada().trim());
     comments.save(new TicketComment(UUID.randomUUID(), saved, autor, publicMessage.trim(), false, OffsetDateTime.now()));
     comments.save(new TicketComment(UUID.randomUUID(), saved, autor, autor.getNomeCompleto() + " resolveu formalmente o chamado", true, OffsetDateTime.now()));
     return Dto.ticket(saved);

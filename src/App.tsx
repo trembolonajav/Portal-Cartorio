@@ -807,8 +807,6 @@ function TicketDetail({
   const [resolutionForm, setResolutionForm] = useState({
     causa: "",
     acaoRealizada: "",
-    solucao: "",
-    observacaoSolicitante: "",
   });
   const isStaff = canOperate(user);
   const isAdmin = canAdmin(user);
@@ -842,7 +840,7 @@ function TicketDetail({
   async function submitResolution() {
     const missing = Object.values(resolutionForm).some((value) => !value.trim());
     if (missing) {
-      toast.error("Preencha causa, acao realizada, solucao e observacao ao solicitante.");
+      toast.error("Preencha causa identificada e acao realizada.");
       return;
     }
     await api<Ticket>(`/tickets/${ticket.numero}/resolve`, {
@@ -850,7 +848,7 @@ function TicketDetail({
       body: JSON.stringify({ ...resolutionForm, autorId: user.id }),
     });
     setResolutionOpen(false);
-    setResolutionForm({ causa: "", acaoRealizada: "", solucao: "", observacaoSolicitante: "" });
+    setResolutionForm({ causa: "", acaoRealizada: "" });
     await loadComments();
     await onChanged();
     toast.success("Chamado resolvido com registro da solucao.");
@@ -1071,7 +1069,7 @@ function TicketDetail({
               <div>
                 <h3 className="text-xl font-semibold">Resolver chamado #{ticket.numero}</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Registre a causa e a solucao antes de fechar o atendimento.
+                  Registre o problema encontrado e como ele foi resolvido.
                 </p>
               </div>
               <button
@@ -1093,18 +1091,6 @@ function TicketDetail({
                 value={resolutionForm.acaoRealizada}
                 onChange={(value) => setResolutionForm((current) => ({ ...current, acaoRealizada: value }))}
                 placeholder="Ex.: removido driver antigo, instalado pacote atualizado e reiniciado spooler."
-              />
-              <ResolutionField
-                label="Solucao aplicada"
-                value={resolutionForm.solucao}
-                onChange={(value) => setResolutionForm((current) => ({ ...current, solucao: value }))}
-                placeholder="Ex.: impressora voltou a imprimir etiquetas normalmente."
-              />
-              <ResolutionField
-                label="Observacao ao solicitante"
-                value={resolutionForm.observacaoSolicitante}
-                onChange={(value) => setResolutionForm((current) => ({ ...current, observacaoSolicitante: value }))}
-                placeholder="Ex.: caso volte a falhar, abrir novo chamado informando a estacao."
               />
             </div>
             <div className="mt-6 flex justify-end gap-3">

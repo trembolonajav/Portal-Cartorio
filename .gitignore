@@ -14,6 +14,8 @@ dist-ssr
 .vinxi
 .nitro
 *.local
+backup.sql
+*.dump
 
 # Java
 backend/target/

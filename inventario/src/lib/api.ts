@@ -13,6 +13,9 @@ export class ApiError extends Error {
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = `Erro HTTP ${response.status}`;
+    if (response.status === 403) {
+      message = "Sem permissao para executar esta acao. Entre novamente com um usuario administrador ou operador.";
+    }
     try {
       const payload = await response.json();
       if (payload?.message) {

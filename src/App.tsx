@@ -449,6 +449,8 @@ function TicketsPage({
   const [dateTo, setDateTo] = useState("");
   const [tab, setTab] = useState<TabKey>("todos");
   const [newTicketOpen, setNewTicketOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const isStaff = canOperate(user);
   const visibleTickets = useMemo(
     () => tickets.filter((ticket) => isStaff || ticket.criadoPor.id === user.id),
@@ -530,6 +532,21 @@ function TicketsPage({
       return searchTerms.every((term) => searchable.includes(term));
     });
   }, [visibleTickets, tab, status, priority, setorId, responsavelId, dateFrom, dateTo, query, globalQuery, user.id, isStaff]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const pageStart = (currentPage - 1) * itemsPerPage;
+  const pageEnd = Math.min(pageStart + itemsPerPage, filtered.length);
+  const paginatedTickets = filtered.slice(pageStart, pageEnd);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tab, status, priority, setorId, responsavelId, dateFrom, dateTo, query, globalQuery]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const selectedTicket = tickets.find((ticket) => ticket.numero === selected && (isStaff || ticket.criadoPor.id === user.id)) ?? null;
   if (selectedTicket) {
@@ -693,7 +710,7 @@ function TicketsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.slice(0, 8).map((ticket) => (
+              {paginatedTickets.map((ticket) => (
                 <tr key={ticket.id} className="hover:bg-slate-50">
                   <td className="px-6 py-5 font-mono text-base">#{ticket.numero}</td>
                   <td className="max-w-[320px] px-6 py-5">
@@ -738,20 +755,21 @@ function TicketsPage({
 
         <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4 text-sm text-slate-600">
           <span>
-            Mostrando {filtered.length ? 1 : 0} a {Math.min(8, filtered.length)} de{" "}
+            Mostrando {filtered.length ? pageStart + 1 : 0} a {pageEnd} de{" "}
             {filtered.length} chamados
           </span>
           <div className="flex items-center gap-2">
-            {[1, 2, 3].map((page) => (
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
               <button
                 key={page}
-                className={`h-9 w-9 rounded-md border ${page === 1 ? "border-[#062449] bg-[#062449] text-white" : "border-slate-200 bg-white"}`}
+                onClick={() => setCurrentPage(page)}
+                className={`h-9 w-9 rounded-md border ${page === currentPage ? "border-[#062449] bg-[#062449] text-white" : "border-slate-200 bg-white"}`}
               >
                 {page}
               </button>
             ))}
           </div>
-          <button className="rounded-md border border-slate-200 px-4 py-2">10 por página</button>
+          <button className="rounded-md border border-slate-200 px-4 py-2">{itemsPerPage} por página</button>
         </div>
       </section>
 

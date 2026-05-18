@@ -151,20 +151,17 @@ const PatrimoniosPage = () => {
       return;
     }
 
-    if (editingId) {
-      const ok = await updateAsset(editingId, { ...form });
-      if (!ok) {
-        toast.error('Código patrimonial já existe em outro item');
-        return;
+    try {
+      if (editingId) {
+        await updateAsset(editingId, { ...form });
+        toast.success('Patrimônio atualizado');
+      } else {
+        await addAsset({ ...form });
+        toast.success('Patrimônio cadastrado');
       }
-      toast.success('Patrimônio atualizado');
-    } else {
-      const id = await addAsset({ ...form });
-      if (!id) {
-        toast.error('Código patrimonial já existe');
-        return;
-      }
-      toast.success('Patrimônio cadastrado');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao salvar patrimônio');
+      return;
     }
 
     setFormOpen(false);

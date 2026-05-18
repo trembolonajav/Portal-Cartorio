@@ -27,8 +27,8 @@ interface InventoryState {
   isLoading: boolean;
   error: string | null;
 
-  addAsset: (asset: Omit<Asset, 'id'>) => Promise<string | null>;
-  updateAsset: (id: string, updates: Partial<Asset>) => Promise<boolean>;
+  addAsset: (asset: Omit<Asset, 'id'>) => Promise<string>;
+  updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   importAssets: (items: Omit<Asset, 'id'>[]) => Promise<{ imported: number; skipped: number }>;
   isAssetCodeUnique: (code: string, excludeId?: string) => boolean;
@@ -313,47 +313,38 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   },
 
   addAsset: async (assetData) => {
-    try {
-      const created = await inventoryApi.createAsset({
-        assetCode: assetData.assetCode,
-        type: assetData.type,
-        description: assetData.description,
-        serialNumber: assetData.serialNumber,
-        status: assetData.status,
-        origin: assetData.origin,
-        manufacturer: assetData.manufacturer,
-        model: assetData.model,
-        processor: assetData.processor,
-        operatingSystem: assetData.os,
-      });
-      await get().refreshAll();
-      return String(created.assetId);
-    } catch {
-      return null;
-    }
+    const created = await inventoryApi.createAsset({
+      assetCode: assetData.assetCode,
+      type: assetData.type,
+      description: assetData.description,
+      serialNumber: assetData.serialNumber,
+      status: assetData.status,
+      origin: assetData.origin,
+      manufacturer: assetData.manufacturer,
+      model: assetData.model,
+      processor: assetData.processor,
+      operatingSystem: assetData.os,
+    });
+    await get().refreshAll();
+    return String(created.assetId);
   },
 
   updateAsset: async (id, updates) => {
     const current = get().assets.find(asset => asset.id === id);
-    if (!current) return false;
-    try {
-      await inventoryApi.updateAsset(id, {
-        assetCode: updates.assetCode ?? current.assetCode,
-        type: updates.type ?? current.type,
-        description: updates.description ?? current.description,
-        serialNumber: updates.serialNumber ?? current.serialNumber,
-        status: updates.status ?? current.status,
-        origin: updates.origin ?? current.origin,
-        manufacturer: updates.manufacturer ?? current.manufacturer,
-        model: updates.model ?? current.model,
-        processor: updates.processor ?? current.processor,
-        operatingSystem: updates.os ?? current.os,
-      });
-      await get().refreshAll();
-      return true;
-    } catch {
-      return false;
-    }
+    if (!current) throw new Error('Patrimonio nao encontrado');
+    await inventoryApi.updateAsset(id, {
+      assetCode: updates.assetCode ?? current.assetCode,
+      type: updates.type ?? current.type,
+      description: updates.description ?? current.description,
+      serialNumber: updates.serialNumber ?? current.serialNumber,
+      status: updates.status ?? current.status,
+      origin: updates.origin ?? current.origin,
+      manufacturer: updates.manufacturer ?? current.manufacturer,
+      model: updates.model ?? current.model,
+      processor: updates.processor ?? current.processor,
+      operatingSystem: updates.os ?? current.os,
+    });
+    await get().refreshAll();
   },
 
   deleteAsset: async (id) => {

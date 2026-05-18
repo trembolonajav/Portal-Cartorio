@@ -120,8 +120,8 @@ export default function App() {
 }
 
 function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("123456");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [keepConnected, setKeepConnected] = useState(true);
   const [loading, setLoading] = useState(false);
 

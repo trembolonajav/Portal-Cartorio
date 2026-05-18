@@ -14,3 +14,6 @@ spring:
         jdbc:
           time_zone: UTC
     open-in-view: false
+
+app:
+  seed-demo-data: ${APP_SEED_DEMO_DATA:false}

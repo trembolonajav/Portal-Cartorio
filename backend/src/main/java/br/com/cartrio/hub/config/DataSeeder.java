@@ -25,9 +25,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "app.seed-demo-data", havingValue = "true")
 public class DataSeeder implements CommandLineRunner {
   private final UserAccountRepository users;
   private final SetorRepository setores;

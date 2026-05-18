@@ -803,9 +803,18 @@ function TicketDetail({
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [publicMessage, setPublicMessage] = useState("");
   const [internalMessage, setInternalMessage] = useState("");
+  const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [resolutionForm, setResolutionForm] = useState({
+    causa: "",
+    acaoRealizada: "",
+    solucao: "",
+    observacaoSolicitante: "",
+  });
   const isStaff = canOperate(user);
+  const isAdmin = canAdmin(user);
   const isResolved = ticket.status === "resolvido";
-  const canSendPublicComment = isStaff || !isResolved;
+  const canInteract = !isResolved || isAdmin;
+  const canSendPublicComment = canInteract && (isStaff || !isResolved);
 
   const loadComments = useCallback(async () => {
     setComments(await api<TicketComment[]>(`/tickets/${ticket.numero}/comments`));
@@ -830,13 +839,25 @@ function TicketDetail({
     toast.success("Chamado assumido e movido para Em andamento.");
   }
 
-  async function resolveTicket() {
-    await patchTicket({ status: "resolvido" });
-    toast.success("Chamado resolvido.");
+  async function submitResolution() {
+    const missing = Object.values(resolutionForm).some((value) => !value.trim());
+    if (missing) {
+      toast.error("Preencha causa, acao realizada, solucao e observacao ao solicitante.");
+      return;
+    }
+    await api<Ticket>(`/tickets/${ticket.numero}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ ...resolutionForm, autorId: user.id }),
+    });
+    setResolutionOpen(false);
+    setResolutionForm({ causa: "", acaoRealizada: "", solucao: "", observacaoSolicitante: "" });
+    await loadComments();
+    await onChanged();
+    toast.success("Chamado resolvido com registro da solucao.");
   }
 
   async function sendComment(interno: boolean) {
-    if (!isStaff && isResolved) return;
+    if (!canInteract) return;
     const text = interno ? internalMessage : publicMessage;
     if (!text.trim()) return;
     await api<TicketComment>(`/tickets/${ticket.numero}/comments`, {
@@ -964,12 +985,14 @@ function TicketDetail({
                   <textarea
                     value={internalMessage}
                     onChange={(event) => setInternalMessage(event.target.value)}
-                    className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449]"
+                    disabled={!canInteract}
+                    className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449] disabled:cursor-not-allowed disabled:bg-slate-50"
                     placeholder="Anotação interna para operador/admin"
                   />
                   <button
                     onClick={() => sendComment(true)}
-                    className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white"
+                    disabled={!canInteract}
+                    className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Salvar interno
                   </button>
@@ -985,7 +1008,7 @@ function TicketDetail({
               <button
                 onClick={assumeTicket}
                 className="h-11 w-full rounded-md bg-[#062449] font-semibold text-white disabled:opacity-50"
-                disabled={ticket.atribuidoA?.id === user.id || ticket.status === "resolvido"}
+                disabled={ticket.atribuidoA?.id === user.id || !canInteract}
               >
                 Assumir chamado
               </button>
@@ -994,9 +1017,10 @@ function TicketDetail({
                 <select
                   value={ticket.status}
                   onChange={(event) => patchTicket({ status: event.target.value as TicketStatus })}
+                  disabled={!canInteract}
                   className="h-11 w-full rounded-md border border-slate-200 bg-white px-3"
                 >
-                  {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                  {Object.entries(STATUS_LABEL).filter(([value]) => value !== "resolvido" || isResolved).map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
                     </option>
@@ -1010,6 +1034,7 @@ function TicketDetail({
                   onChange={(event) =>
                     patchTicket({ prioridade: event.target.value as TicketPriority })
                   }
+                  disabled={!canInteract}
                   className="h-11 w-full rounded-md border border-slate-200 bg-white px-3"
                 >
                   {Object.entries(PRIORITY_LABEL).map(([value, label]) => (
@@ -1020,9 +1045,9 @@ function TicketDetail({
                 </select>
               </label>
               <button
-                onClick={resolveTicket}
+                onClick={() => setResolutionOpen(true)}
                 className="h-11 w-full rounded-md bg-emerald-600 font-semibold text-white"
-                disabled={ticket.status === "resolvido"}
+                disabled={isResolved}
               >
                 Resolver chamado
               </button>
@@ -1039,6 +1064,66 @@ function TicketDetail({
           </DetailCard>
         </aside>
       </div>
+      {resolutionOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold">Resolver chamado #{ticket.numero}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Registre a causa e a solucao antes de fechar o atendimento.
+                </p>
+              </div>
+              <button
+                onClick={() => setResolutionOpen(false)}
+                className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium"
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="mt-5 grid gap-4">
+              <ResolutionField
+                label="Causa identificada"
+                value={resolutionForm.causa}
+                onChange={(value) => setResolutionForm((current) => ({ ...current, causa: value }))}
+                placeholder="Ex.: driver da impressora estava corrompido apos atualizacao."
+              />
+              <ResolutionField
+                label="Acao realizada"
+                value={resolutionForm.acaoRealizada}
+                onChange={(value) => setResolutionForm((current) => ({ ...current, acaoRealizada: value }))}
+                placeholder="Ex.: removido driver antigo, instalado pacote atualizado e reiniciado spooler."
+              />
+              <ResolutionField
+                label="Solucao aplicada"
+                value={resolutionForm.solucao}
+                onChange={(value) => setResolutionForm((current) => ({ ...current, solucao: value }))}
+                placeholder="Ex.: impressora voltou a imprimir etiquetas normalmente."
+              />
+              <ResolutionField
+                label="Observacao ao solicitante"
+                value={resolutionForm.observacaoSolicitante}
+                onChange={(value) => setResolutionForm((current) => ({ ...current, observacaoSolicitante: value }))}
+                placeholder="Ex.: caso volte a falhar, abrir novo chamado informando a estacao."
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setResolutionOpen(false)}
+                className="h-11 rounded-md border border-slate-200 px-4 text-sm font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitResolution}
+                className="h-11 rounded-md bg-emerald-600 px-5 text-sm font-semibold text-white"
+              >
+                Confirmar resolucao
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1877,6 +1962,30 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
       <p className="mt-1 font-medium text-slate-800">{value}</p>
     </div>
+  );
+}
+
+function ResolutionField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="block space-y-1 text-sm">
+      <span className="font-semibold text-slate-800">{label}</span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-h-20 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449]"
+        placeholder={placeholder}
+      />
+    </label>
   );
 }
 

@@ -14,6 +14,7 @@ import br.com.cartrio.hub.api.Dto.TicketCommentDto;
 import br.com.cartrio.hub.api.Dto.TicketCreate;
 import br.com.cartrio.hub.api.Dto.TicketDto;
 import br.com.cartrio.hub.api.Dto.TicketPatch;
+import br.com.cartrio.hub.api.Dto.TicketResolve;
 import br.com.cartrio.hub.domain.Categoria;
 import br.com.cartrio.hub.domain.Department;
 import br.com.cartrio.hub.domain.Employee;
@@ -127,12 +128,14 @@ public class ApiController {
   public TicketDto updateTicket(@PathVariable int numero, @RequestBody TicketPatch patch) {
     Ticket ticket = findTicket(numero);
     UserAccount autor = patch.autorId() == null ? null : users.findById(patch.autorId()).orElse(null);
+    if (ticket.getStatus() == TicketStatus.resolvido && !isAdmin(autor)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chamado resolvido so pode ser alterado por administrador");
+    }
     if (patch.status() != null) {
-      ticket.setStatus(patch.status());
-      if (patch.status() == TicketStatus.resolvido && ticket.getAtribuidoA() == null && autor != null) {
-        ticket.setAtribuidoA(autor);
-        comments.save(new TicketComment(UUID.randomUUID(), ticket, autor, autor.getNomeCompleto() + " resolveu o chamado", true, OffsetDateTime.now()));
+      if (patch.status() == TicketStatus.resolvido) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use a acao Resolver chamado e informe a solucao aplicada");
       }
+      ticket.setStatus(patch.status());
     }
     if (patch.prioridade() != null) ticket.setPrioridade(patch.prioridade());
     if (patch.atribuidoAId() != null) {
@@ -142,6 +145,39 @@ public class ApiController {
       comments.save(new TicketComment(UUID.randomUUID(), ticket, responsavel, responsavel.getNomeCompleto() + " assumiu o chamado", true, OffsetDateTime.now()));
     }
     return Dto.ticket(tickets.save(ticket));
+  }
+
+  @PostMapping("/tickets/{numero}/resolve")
+  public TicketDto resolveTicket(@PathVariable int numero, @RequestBody TicketResolve request) {
+    Ticket ticket = findTicket(numero);
+    if (ticket.getStatus() == TicketStatus.resolvido) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chamado ja esta resolvido");
+    }
+    UserAccount autor = request.autorId() == null
+      ? users.findByUsername("admin").orElseThrow()
+      : users.findById(request.autorId()).orElseThrow();
+    if (isBlank(request.causa()) || isBlank(request.acaoRealizada()) || isBlank(request.solucao()) || isBlank(request.observacaoSolicitante())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Causa, acao realizada, solucao e observacao ao solicitante sao obrigatorias");
+    }
+    if (ticket.getAtribuidoA() == null) {
+      ticket.setAtribuidoA(autor);
+    }
+    ticket.setStatus(TicketStatus.resolvido);
+    Ticket saved = tickets.save(ticket);
+    String publicMessage = """
+      Solucao do chamado
+
+      Causa identificada: %s
+
+      Acao realizada: %s
+
+      Solucao aplicada: %s
+
+      Observacao ao solicitante: %s
+      """.formatted(request.causa().trim(), request.acaoRealizada().trim(), request.solucao().trim(), request.observacaoSolicitante().trim());
+    comments.save(new TicketComment(UUID.randomUUID(), saved, autor, publicMessage.trim(), false, OffsetDateTime.now()));
+    comments.save(new TicketComment(UUID.randomUUID(), saved, autor, autor.getNomeCompleto() + " resolveu formalmente o chamado", true, OffsetDateTime.now()));
+    return Dto.ticket(saved);
   }
 
   @GetMapping("/tickets/{numero}/comments")
@@ -156,6 +192,9 @@ public class ApiController {
     UserAccount autor = request.autorId() == null
       ? users.findByUsername("admin").orElseThrow()
       : users.findById(request.autorId()).orElseThrow();
+    if (ticket.getStatus() == TicketStatus.resolvido && !isAdmin(autor)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chamado resolvido nao aceita novas interacoes");
+    }
     TicketComment comment = new TicketComment(UUID.randomUUID(), ticket, autor, request.mensagem(), request.interno(), OffsetDateTime.now());
     return Dto.comment(comments.save(comment));
   }
@@ -306,6 +345,14 @@ public class ApiController {
     String normalized = blankToNull(value);
     if (normalized == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     return normalized;
+  }
+
+  private boolean isAdmin(UserAccount user) {
+    return user != null && user.getRoles().contains(AppRole.admin);
+  }
+
+  private boolean isBlank(String value) {
+    return value == null || value.isBlank();
   }
 
   private String blankToNull(String value) {

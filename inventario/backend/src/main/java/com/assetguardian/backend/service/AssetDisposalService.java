@@ -40,6 +40,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -214,26 +215,26 @@ public class AssetDisposalService {
         html.append(documentStart("Termo de Baixa Patrimonial"));
         html.append("""
               <section class="cover">
-                <div class="brand-row">
-                  <div class="brand-mark">IA</div>
-                  <div>
-                    <div class="brand-name">Cartorio Indio Artiaga</div>
-                    <div class="brand-subtitle">4o Tabelionato de Notas</div>
-                  </div>
-                </div>
-                <div class="model-label">DOCUMENTO INTERNO - BAIXA PATRIMONIAL</div>
-                <h1>Termo de Baixa Patrimonial</h1>
-                <p class="cover-subtitle">Controle interno, rastreabilidade e formalizacao da retirada de bens do inventario ativo, com manutencao do historico patrimonial e vinculacao documental.</p>
-                <div class="cover-grid">
+                <div class="cover-content">
+                  <img class="cover-logo" src=\"""").append(html(brandLogoDataUri())).append("""
+                  " alt="" />
+                  <div class="cover-brand">CARTORIO INDIO ARTIAGA</div>
+                  <div class="cover-notary">4o Tabelionato de Notas</div>
+                  <div class="cover-line"></div>
+                  <div class="cover-kicker">MODELO REUTILIZAVEL</div>
+                  <h1>TERMO DE BAIXA PATRIMONIAL</h1>
+                  <p class="cover-subtitle">Baixa patrimonial - documento gerado pelo sistema</p>
+                  <table class="cover-table">
             """);
-        meta(html, "No do termo", termNumber);
-        meta(html, "Processo interno", disposal.getNumber());
-        meta(html, "Data de emissao", date);
-        meta(html, "Unidade", "Cartorio Indio Artiaga - 4o Tabelionato de Notas");
-        meta(html, "Quantidade de bens", String.valueOf(items.size()));
-        meta(html, "Tipo de baixa", disposalType);
-        meta(html, "Status documental", statusLabel(disposal.getStatus()));
+        coverRow(html, "No do termo", termNumber);
+        coverRow(html, "Data de emissao", date);
+        coverRow(html, "Unidade", "Cartorio Indio Artiaga - 4o Tabelionato de Notas");
+        coverRow(html, "Processo interno", disposal.getNumber());
+        coverRow(html, "Quantidade de bens", String.valueOf(items.size()));
+        coverRow(html, "Status documental", statusLabel(disposal.getStatus()));
         html.append("""
+                  </table>
+                  <div class="cover-footer">Inventario patrimonial | Controle interno | Rastreabilidade | Seguranca da informacao</div>
                 </div>
               </section>
 
@@ -571,13 +572,20 @@ public class AssetDisposalService {
                 @page { size: A4; margin: 13mm 13mm 15mm 13mm; @bottom-center { content: "Documento gerado automaticamente pelo Sistema de Inventario Patrimonial"; font-size: 9px; color: #657286; } }
                 body { font-family: Arial, sans-serif; color: #061a38; margin: 0; background: white; font-size: 12px; }
                 .cover, .page, .section, .signature-page { background: white; margin: 0 0 12px; page-break-inside: avoid; break-inside: avoid; }
-                .cover { min-height: 246mm; padding: 24px 26px; border-top: 12px solid #062449; border-bottom: 7px solid #d5a84f; margin-bottom: 18px; position: relative; }
-                .cover:after { content: ""; position: absolute; right: 18px; bottom: 18px; width: 130px; height: 130px; border: 1px solid #d5a84f; opacity: .28; }
-                .brand-row { display: table; width: 100%; margin-bottom: 54px; }
-                .brand-mark { display: table-cell; width: 58px; height: 58px; border-radius: 50%; background: #062449; color: #d5a84f; text-align: center; vertical-align: middle; font-size: 20px; font-weight: 800; border: 2px solid #d5a84f; }
-                .brand-row > div:last-child { display: table-cell; vertical-align: middle; padding-left: 14px; }
-                .brand-name { font-size: 18px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-                .brand-subtitle { color: #d5a84f; font-size: 13px; margin-top: 2px; }
+                .cover { min-height: 267mm; margin: -13mm -13mm 18px -13mm; padding: 0; page-break-after: always; background: #062449; background-image: radial-gradient(circle at 50% 30%, #0c3667 0, #062449 45%, #03172e 100%); color: white; position: relative; overflow: hidden; }
+                .cover-content { padding: 34mm 23mm 18mm; text-align: center; }
+                .cover-logo { width: 48px; height: auto; margin: 0 auto 14mm; display: block; }
+                .cover-brand { font-family: Georgia, 'Times New Roman', serif; font-size: 26px; line-height: 1.1; letter-spacing: .08em; font-weight: 700; color: white; }
+                .cover-notary { color: #d8bd83; font-size: 17px; margin-top: 4px; letter-spacing: .03em; }
+                .cover-line { height: 1px; background: #d8bd83; width: 78%; margin: 28mm auto 19mm; }
+                .cover-kicker { color: #d8bd83; font-size: 12px; font-weight: 800; letter-spacing: .12em; margin-bottom: 9mm; }
+                .cover h1 { color: white; font-size: 31px; letter-spacing: .09em; font-weight: 800; margin: 0 0 7mm; }
+                .cover .cover-subtitle { color: #d8bd83; font-size: 17px; margin: 0 0 18mm; max-width: none; }
+                .cover-table { width: 82%; margin: 0 auto; border-collapse: collapse; color: white; font-size: 12px; }
+                .cover-table th, .cover-table td { border: 1px solid #d8bd83; background: transparent; padding: 10px 12px; color: white; }
+                .cover-table th { width: 34%; text-align: left; font-weight: 500; }
+                .cover-table td { text-align: right; font-weight: 800; letter-spacing: .04em; }
+                .cover-footer { position: absolute; left: 0; right: 0; bottom: 20mm; text-align: center; color: white; font-size: 12px; }
                 .model-label { color: #d5a84f; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
                 h1 { font-size: 28px; line-height: 1.1; margin: 0 0 8px; color: #061a38; }
                 h2 { font-size: 17px; margin: 13px 0 8px; color: #061a38; }
@@ -662,6 +670,25 @@ public class AssetDisposalService {
             .append("</th><td>")
             .append(html(value))
             .append("</td></tr>");
+    }
+
+    private void coverRow(StringBuilder builder, String label, String value) {
+        builder.append("<tr><th>")
+            .append(html(label))
+            .append("</th><td>")
+            .append(html(value))
+            .append("</td></tr>");
+    }
+
+    private String brandLogoDataUri() {
+        try (var stream = AssetDisposalService.class.getResourceAsStream("/document-assets/logo-cartorio.png")) {
+            if (stream == null) {
+                return "";
+            }
+            return "data:image/png;base64," + Base64.getEncoder().encodeToString(stream.readAllBytes());
+        } catch (IOException ex) {
+            return "";
+        }
     }
 
     private String dominantCategory(List<AssetDisposalItem> items) {

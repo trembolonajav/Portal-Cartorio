@@ -7,6 +7,7 @@ export interface StoredAuthCredentials {
 
 const AUTH_STORAGE_KEY = "asset-guardian.auth";
 const PORTAL_AUTH_STORAGE_KEY = "cart-rio-auth";
+const PORTAL_USER_STORAGE_KEY = "cart-rio-user";
 const PORTAL_AUTH_COOKIE = "cart_rio_auth";
 
 export const buildBasicToken = (username: string, password: string) =>
@@ -54,6 +55,7 @@ export const clearStoredAuth = () => {
   if (typeof window !== "undefined") {
     window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
     window.localStorage.removeItem(PORTAL_AUTH_STORAGE_KEY);
+    window.localStorage.removeItem(PORTAL_USER_STORAGE_KEY);
     document.cookie = `${PORTAL_AUTH_COOKIE}=; Max-Age=0; path=/; SameSite=Lax`;
   }
 };

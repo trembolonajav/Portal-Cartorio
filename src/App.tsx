@@ -90,7 +90,17 @@ function canAdmin(user: AuthUser) {
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(() => {
     const raw = localStorage.getItem("cart-rio-user");
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
+    if (!raw) return null;
+    if (!getSharedAuthToken()) {
+      localStorage.removeItem("cart-rio-user");
+      return null;
+    }
+    try {
+      return JSON.parse(raw) as AuthUser;
+    } catch {
+      localStorage.removeItem("cart-rio-user");
+      return null;
+    }
   });
 
   function onLogin(nextUser: AuthUser) {
@@ -251,6 +261,11 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
               key={item.key}
               onClick={() => {
                 if (item.externalUrl) {
+                  if (!getSharedAuthToken()) {
+                    toast.error("Sua sessao expirou. Entre novamente para abrir o inventario.");
+                    onLogout();
+                    return;
+                  }
                   window.location.href = item.externalUrl;
                   return;
                 }

@@ -23,7 +23,7 @@ const LoadingScreen = () => (
 
 const RedirectToPortalLogin = () => {
   useEffect(() => {
-    window.location.href = "http://localhost:8080";
+    window.location.href = `${window.location.protocol}//${window.location.hostname}:8080`;
   }, []);
 
   return <LoadingScreen />;

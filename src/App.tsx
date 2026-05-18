@@ -54,11 +54,12 @@ const NAV_ITEMS: Array<{
   icon: LucideIcon;
   placeholder?: boolean;
   externalUrl?: string;
+  externalPort?: number;
 }> = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "chamados", label: "Chamados", icon: TicketIcon },
   { key: "relatorios", label: "Relatórios", icon: BarChart3 },
-  { key: "inventario", label: "Inventário", icon: Package, externalUrl: "http://localhost:8082" },
+  { key: "inventario", label: "Inventário", icon: Package, externalPort: 8082 },
   { key: "usuarios", label: "Funcionarios", icon: Users },
   { key: "setores", label: "Departamentos", icon: Grid2X2 },
   { key: "configuracoes", label: "Configurações", icon: Settings },
@@ -85,6 +86,18 @@ function canOperate(user: AuthUser) {
 
 function canAdmin(user: AuthUser) {
   return user.roles.includes("admin");
+}
+
+function sameHostUrl(port: number, path = "") {
+  if (typeof window === "undefined") return path || "/";
+  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
+}
+
+function inventoryApiUrl(path: string) {
+  if (typeof window !== "undefined" && window.location.port === "8080") {
+    return `/inventory-api/v1${path}`;
+  }
+  return sameHostUrl(8083, `/api/v1${path}`);
 }
 
 export default function App() {
@@ -260,13 +273,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
             <button
               key={item.key}
               onClick={() => {
-                if (item.externalUrl) {
+                if (item.externalUrl || item.externalPort) {
                   if (!getSharedAuthToken()) {
                     toast.error("Sua sessao expirou. Entre novamente para abrir o inventario.");
                     onLogout();
                     return;
                   }
-                  window.location.href = item.externalUrl;
+                  window.location.href = item.externalUrl ?? sameHostUrl(item.externalPort!);
                   return;
                 }
                 const nextView = item.key as View;
@@ -278,7 +291,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
                 setView(nextView);
               }}
               className={`flex h-12 w-full items-center gap-3 rounded-lg px-4 text-left text-[15px] transition ${
-                view === item.key && !item.externalUrl
+                view === item.key && !item.externalUrl && !item.externalPort
                   ? "bg-white/10 text-[#f2cf74] shadow-[inset_3px_0_0_#e0b646]"
                   : "text-white/90 hover:bg-white/8"
               }`}
@@ -1161,7 +1174,7 @@ function ReportsPage() {
       api<Ticket[]>("/tickets"),
       api<Employee[]>("/employees"),
       token
-        ? fetch("http://localhost:8083/api/v1/assets-flat", { headers: { Authorization: token } }).then((response) => response.ok ? response.json() : [])
+        ? fetch(inventoryApiUrl("/assets-flat"), { headers: { Authorization: token } }).then((response) => response.ok ? response.json() : [])
         : Promise.resolve([]),
     ])
       .then(([nextTickets, nextEmployees, nextAssets]) => {
@@ -1394,10 +1407,10 @@ function ConfigPage({ view }: { view: View }) {
       api<Employee[]>("/employees"),
       api<Categoria[]>("/categorias"),
       authToken
-        ? fetch("http://localhost:8083/api/v1/employees", { headers: { Authorization: authToken } }).then((response) => response.ok ? response.json() : [])
+        ? fetch(inventoryApiUrl("/employees"), { headers: { Authorization: authToken } }).then((response) => response.ok ? response.json() : [])
         : Promise.resolve([]),
       authToken
-        ? fetch("http://localhost:8083/api/v1/stations", { headers: { Authorization: authToken } }).then((response) => response.ok ? response.json() : [])
+        ? fetch(inventoryApiUrl("/stations"), { headers: { Authorization: authToken } }).then((response) => response.ok ? response.json() : [])
         : Promise.resolve([]),
     ])
       .then(([nextDepartments, nextEmployees, nextCategorias, nextInventoryEmployees, nextStations]) => {
@@ -1756,14 +1769,14 @@ async function syncStationResponsibility(employeeId: string, previousStationId: 
   if (!token || previousStationId === nextStationId) return;
   const headers = { "Content-Type": "application/json", Authorization: token };
   if (previousStationId) {
-    await fetch(`http://localhost:8083/api/v1/stations/${previousStationId}/responsible`, {
+    await fetch(inventoryApiUrl(`/stations/${previousStationId}/responsible`), {
       method: "PUT",
       headers,
       body: JSON.stringify({ employeeId: null }),
     });
   }
   if (nextStationId) {
-    await fetch(`http://localhost:8083/api/v1/stations/${nextStationId}/responsible`, {
+    await fetch(inventoryApiUrl(`/stations/${nextStationId}/responsible`), {
       method: "PUT",
       headers,
       body: JSON.stringify({ employeeId }),

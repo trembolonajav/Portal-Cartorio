@@ -42,7 +42,10 @@
     ports:
       - "8080:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+      inventory-backend:
+        condition: service_healthy
 
   inventory-backend:
     build:

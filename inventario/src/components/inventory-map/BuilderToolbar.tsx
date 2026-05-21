@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Square, Minus, MonitorSmartphone, Armchair, Type, Grid3X3, Eye, Pencil, Save, RotateCcw, Copy, Trash2, Link2, Plus, ChevronRight, ChevronDown, Building, Layers, LayoutGrid, MoreHorizontal, FolderPlus } from 'lucide-react';
+import { Square, Minus, MonitorSmartphone, Armchair, Printer, Network, Type, Grid3X3, Eye, Pencil, Save, RotateCcw, Copy, Trash2, Link2, Plus, ChevronRight, ChevronDown, Building, Layers, LayoutGrid, MoreHorizontal, FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,8 @@ const toolItems: { type: ElementType; label: string; icon: React.ReactNode }[] =
   { type: 'PARTITION', label: 'Divisória', icon: <Minus className="h-4 w-4 opacity-50" /> },
   { type: 'DESK', label: 'Mesa', icon: <MonitorSmartphone className="h-4 w-4" /> },
   { type: 'CHAIR', label: 'Cadeira', icon: <Armchair className="h-4 w-4" /> },
+  { type: 'PRINTER', label: 'Impressora', icon: <Printer className="h-4 w-4" /> },
+  { type: 'SWITCH', label: 'Switch', icon: <Network className="h-4 w-4" /> },
   { type: 'LABEL', label: 'Rótulo', icon: <Type className="h-4 w-4" /> },
   { type: 'ROOM_BLOCK', label: 'Bloco', icon: <Square className="h-4 w-4" /> },
 ];

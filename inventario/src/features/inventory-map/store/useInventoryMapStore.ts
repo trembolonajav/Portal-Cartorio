@@ -117,6 +117,8 @@ const defaultsForType = (type: ElementType): Partial<LayoutElement> => {
     case 'PARTITION': return { width: 160, height: 4, layer: 'structural', zIndex: 2 };
     case 'DESK': return { width: 140, height: 70, layer: 'furniture', zIndex: 10 };
     case 'CHAIR': return { width: 40, height: 40, layer: 'furniture', zIndex: 9 };
+    case 'PRINTER': return { width: 74, height: 54, layer: 'furniture', zIndex: 11 };
+    case 'SWITCH': return { width: 96, height: 42, layer: 'furniture', zIndex: 11 };
     case 'LABEL': return { width: 100, height: 24, layer: 'labels', zIndex: 20, label: 'Rótulo' };
     case 'ROOM_BLOCK': return { width: 200, height: 150, layer: 'structural', zIndex: 0 };
     default: return { width: 100, height: 50, layer: 'furniture', zIndex: 5 };

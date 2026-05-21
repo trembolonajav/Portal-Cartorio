@@ -22,7 +22,7 @@ public class Dto {
   public record DepartmentDto(UUID id, String name, boolean active) {}
   public record EmployeeDto(UUID id, String fullName, String cpf, String email, EmployeeStatus status, DepartmentDto department, String username, AppRole role) {}
   public record DepartmentRequest(String name, Boolean active) {}
-  public record EmployeeRequest(String fullName, String cpf, String email, EmployeeStatus status, UUID departmentId, AppRole role, String password) {}
+  public record EmployeeRequest(String fullName, String cpf, String email, EmployeeStatus status, UUID departmentId, AppRole role, String username, String password) {}
   public record SetorDto(UUID id, String nome, boolean ativo) {}
   public record CategoriaDto(UUID id, String nome, boolean ativo) {}
   public record TicketCreate(String titulo, String descricao, TicketPriority prioridade, UUID categoriaId, UUID setorId, UUID criadoPorId, String anexos, String equipamentoRelacionado) {}

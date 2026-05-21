@@ -107,7 +107,14 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
+    const body = await response.text();
+    let message = body;
+    try {
+      const payload = JSON.parse(body) as { message?: string; detail?: string; error?: string };
+      message = payload.message || payload.detail || payload.error || body;
+    } catch {
+      // Text responses are already suitable for display.
+    }
     throw new Error(message || `HTTP ${response.status}`);
   }
 

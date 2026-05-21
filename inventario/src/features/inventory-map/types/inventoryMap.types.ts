@@ -1,4 +1,4 @@
-export type ElementType = 'WALL' | 'PARTITION' | 'DESK' | 'CHAIR' | 'LABEL' | 'ROOM_BLOCK';
+export type ElementType = 'WALL' | 'PARTITION' | 'DESK' | 'CHAIR' | 'PRINTER' | 'SWITCH' | 'LABEL' | 'ROOM_BLOCK';
 export type EditorMode = 'VIEW' | 'EDIT';
 export type StationStatus = 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
 export type AssetStatus = 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'DISPOSED' | 'IN_STOCK';

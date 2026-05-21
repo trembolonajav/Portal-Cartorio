@@ -77,7 +77,7 @@ export interface ApiHistoryEvent {
 
 export interface ApiLayoutElement {
   id: string;
-  elementType: "WALL" | "PARTITION" | "DESK" | "CHAIR" | "LABEL" | "ROOM_BLOCK";
+  elementType: "WALL" | "PARTITION" | "DESK" | "CHAIR" | "PRINTER" | "SWITCH" | "LABEL" | "ROOM_BLOCK";
   layer: "structural" | "furniture" | "labels";
   x: number;
   y: number;

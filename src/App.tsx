@@ -1386,18 +1386,21 @@ function ConfigPage({ view }: { view: View }) {
   const [inventoryEmployees, setInventoryEmployees] = useState<Array<{ id: string; stationId: number | null }>>([]);
   const [stations, setStations] = useState<Array<{ id: number; code: string; name: string }>>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [departmentName, setDepartmentName] = useState("");
-  const [editingDepartmentId, setEditingDepartmentId] = useState<string | null>(null);
+  const [departmentModalOpen, setDepartmentModalOpen] = useState(false);
+  const [departmentForm, setDepartmentForm] = useState({ id: "", name: "" });
+  const [employeeModalOpen, setEmployeeModalOpen] = useState(false);
   const [employeeForm, setEmployeeForm] = useState({
     id: "",
     fullName: "",
     cpf: "",
     email: "",
+    username: "",
     status: "ACTIVE" as Employee["status"],
     departmentId: "",
     stationId: "",
     role: "usuario" as AppRole,
     password: "",
+    passwordConfirmation: "",
   });
 
   const loadAdminData = useCallback(() => {
@@ -1429,14 +1432,14 @@ function ConfigPage({ view }: { view: View }) {
 
   async function saveDepartment(event: FormEvent) {
     event.preventDefault();
-    const name = departmentName.trim();
+    const name = departmentForm.name.trim();
     if (!name) {
       toast.error("Informe o nome do departamento.");
       return;
     }
     try {
-      if (editingDepartmentId) {
-        await api<Department>(`/departments/${editingDepartmentId}`, {
+      if (departmentForm.id) {
+        await api<Department>(`/departments/${departmentForm.id}`, {
           method: "PATCH",
           body: JSON.stringify({ name }),
         });
@@ -1448,8 +1451,7 @@ function ConfigPage({ view }: { view: View }) {
         });
         toast.success("Departamento cadastrado.");
       }
-      setDepartmentName("");
-      setEditingDepartmentId(null);
+      closeDepartmentModal();
       loadAdminData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar departamento");
@@ -1470,16 +1472,39 @@ function ConfigPage({ view }: { view: View }) {
       fullName: employee.fullName,
       cpf: employee.cpf ?? "",
       email: employee.email ?? "",
+      username: employee.username ?? "",
       status: employee.status,
       departmentId: employee.department?.id ?? "",
       stationId: inventoryEmployees.find((item) => item.id === employee.id)?.stationId?.toString() ?? "",
       role: employee.role ?? "usuario",
       password: "",
+      passwordConfirmation: "",
     });
+    setEmployeeModalOpen(true);
   }
 
   function clearEmployeeForm() {
-    setEmployeeForm({ id: "", fullName: "", cpf: "", email: "", status: "ACTIVE", departmentId: "", stationId: "", role: "usuario", password: "" });
+    setEmployeeForm({ id: "", fullName: "", cpf: "", email: "", username: "", status: "ACTIVE", departmentId: "", stationId: "", role: "usuario", password: "", passwordConfirmation: "" });
+  }
+
+  function openNewEmployeeModal() {
+    clearEmployeeForm();
+    setEmployeeModalOpen(true);
+  }
+
+  function closeEmployeeModal() {
+    setEmployeeModalOpen(false);
+    clearEmployeeForm();
+  }
+
+  function openDepartmentModal(department?: Department) {
+    setDepartmentForm({ id: department?.id ?? "", name: department?.name ?? "" });
+    setDepartmentModalOpen(true);
+  }
+
+  function closeDepartmentModal() {
+    setDepartmentModalOpen(false);
+    setDepartmentForm({ id: "", name: "" });
   }
 
   async function saveEmployee(event: FormEvent) {
@@ -1488,10 +1513,15 @@ function ConfigPage({ view }: { view: View }) {
       toast.error("Informe o nome do funcionario.");
       return;
     }
+    if (employeeForm.password !== employeeForm.passwordConfirmation) {
+      toast.error("A confirmacao da senha nao confere.");
+      return;
+    }
     const payload = {
       fullName: employeeForm.fullName.trim(),
       cpf: employeeForm.cpf.trim() || null,
       email: employeeForm.email.trim() || null,
+      username: employeeForm.username.trim() || null,
       status: employeeForm.status,
       departmentId: employeeForm.departmentId || null,
       role: employeeForm.role,
@@ -1516,7 +1546,7 @@ function ConfigPage({ view }: { view: View }) {
         toast.success("Funcionario cadastrado.");
       }
       await syncStationResponsibility(savedEmployee.id, previousStationId, employeeForm.stationId);
-      clearEmployeeForm();
+      closeEmployeeModal();
       loadAdminData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar funcionario");
@@ -1530,35 +1560,20 @@ function ConfigPage({ view }: { view: View }) {
     <div className="space-y-6">
       {showDepartments && (
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <header className="border-b border-slate-200 p-5">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5">
             <h3 className="font-semibold">Departamentos</h3>
-          </header>
-          <form onSubmit={saveDepartment} className="grid gap-3 border-b border-slate-100 p-5 md:grid-cols-[1fr_auto_auto]">
-            <input
-              value={departmentName}
-              onChange={(event) => setDepartmentName(event.target.value)}
-              className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
-              placeholder="Nome do departamento"
-            />
-            <button className="h-11 rounded-md bg-[#062449] px-5 font-semibold text-white">
-              {editingDepartmentId ? "Salvar" : "Cadastrar"}
+            <button type="button" onClick={() => openDepartmentModal()} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a315f]">
+              <Plus className="h-4 w-4" />
+              Cadastrar departamento
             </button>
-            {editingDepartmentId && (
-              <button type="button" onClick={() => { setEditingDepartmentId(null); setDepartmentName(""); }} className="h-11 rounded-md border border-slate-200 px-5">
-                Cancelar
-              </button>
-            )}
-          </form>
+          </header>
           <AdminList
             items={departments.map((department) => ({
               id: department.id,
               label: department.name,
               active: department.active,
               detail: `${employees.filter((employee) => employee.department?.id === department.id).length} funcionario(s)`,
-              onEdit: () => {
-                setEditingDepartmentId(department.id);
-                setDepartmentName(department.name);
-              },
+              onEdit: () => openDepartmentModal(department),
               onToggle: () => void toggleDepartment(department),
             }))}
           />
@@ -1567,42 +1582,13 @@ function ConfigPage({ view }: { view: View }) {
 
       {showEmployees && (
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <header className="border-b border-slate-200 p-5">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5">
             <h3 className="font-semibold">Funcionarios</h3>
+            <button type="button" onClick={openNewEmployeeModal} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a315f]">
+              <Plus className="h-4 w-4" />
+              Cadastrar funcionario
+            </button>
           </header>
-          <form onSubmit={saveEmployee} className="grid gap-4 border-b border-slate-100 p-5 lg:grid-cols-3">
-            <input value={employeeForm.fullName} onChange={(event) => setEmployeeForm((current) => ({ ...current, fullName: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="Nome completo" />
-            <input value={employeeForm.email} onChange={(event) => setEmployeeForm((current) => ({ ...current, email: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="E-mail" />
-            <input value={employeeForm.cpf} onChange={(event) => setEmployeeForm((current) => ({ ...current, cpf: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="CPF" />
-            <select value={employeeForm.departmentId} onChange={(event) => setEmployeeForm((current) => ({ ...current, departmentId: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
-              <option value="">Sem departamento</option>
-              {departments.filter((department) => department.active).map((department) => (
-                <option key={department.id} value={department.id}>{department.name}</option>
-              ))}
-            </select>
-            <select value={employeeForm.status} onChange={(event) => setEmployeeForm((current) => ({ ...current, status: event.target.value as Employee["status"] }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
-              <option value="ACTIVE">Ativo</option>
-              <option value="INACTIVE">Inativo</option>
-            </select>
-            <select value={employeeForm.role} onChange={(event) => setEmployeeForm((current) => ({ ...current, role: event.target.value as AppRole }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
-              <option value="usuario">Funcionario</option>
-              <option value="operador">Operador</option>
-              <option value="admin">Administrador</option>
-            </select>
-            <input type="password" value={employeeForm.password} onChange={(event) => setEmployeeForm((current) => ({ ...current, password: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder={employeeForm.id ? "Nova senha (opcional)" : "Senha inicial (padrao 123456)"} />
-            <select value={employeeForm.stationId} onChange={(event) => setEmployeeForm((current) => ({ ...current, stationId: event.target.value }))} className="h-11 rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
-              <option value="">Sem estacao</option>
-              {stations.map((station) => (
-                <option key={station.id} value={station.id}>{station.code} - {station.name}</option>
-              ))}
-            </select>
-            <div className="flex gap-3">
-              <button className="h-11 flex-1 rounded-md bg-[#062449] px-5 font-semibold text-white">
-                {employeeForm.id ? "Salvar" : "Cadastrar"}
-              </button>
-              {employeeForm.id && <button type="button" onClick={clearEmployeeForm} className="h-11 rounded-md border border-slate-200 px-5">Cancelar</button>}
-            </div>
-          </form>
           <AdminList
             items={employees.map((employee) => ({
               id: employee.id,
@@ -1611,17 +1597,6 @@ function ConfigPage({ view }: { view: View }) {
               detail: `${employee.department?.name ?? "Sem departamento"}${employee.email ? ` · ${employee.email}` : ""}${stationLabel(inventoryEmployees.find((item) => item.id === employee.id)?.stationId, stations)}`,
               onEdit: () => editEmployee(employee),
               onToggle: () => {
-                setEmployeeForm({
-                  id: employee.id,
-                  fullName: employee.fullName,
-                  cpf: employee.cpf ?? "",
-                  email: employee.email ?? "",
-                  status: employee.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
-                  departmentId: employee.department?.id ?? "",
-                  role: employee.role ?? "usuario",
-                  password: "",
-                  stationId: inventoryEmployees.find((item) => item.id === employee.id)?.stationId?.toString() ?? "",
-                });
                 void api<Employee>(`/employees/${employee.id}`, {
                   method: "PATCH",
                   body: JSON.stringify({ status: employee.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }),
@@ -1630,6 +1605,88 @@ function ConfigPage({ view }: { view: View }) {
             }))}
           />
         </section>
+      )}
+
+      {departmentModalOpen && (
+        <AdminModal
+          title={departmentForm.id ? "Editar departamento" : "Cadastrar departamento"}
+          description="Mantenha os departamentos usados para organizar funcionarios, inventario e relatorios."
+          onClose={closeDepartmentModal}
+        >
+          <form onSubmit={saveDepartment} className="space-y-5">
+            <FormField label="Nome do departamento">
+              <input
+                autoFocus
+                value={departmentForm.name}
+                onChange={(event) => setDepartmentForm((current) => ({ ...current, name: event.target.value }))}
+                className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+                placeholder="Reconhecimento de firma"
+              />
+            </FormField>
+            <ModalActions onClose={closeDepartmentModal} submitLabel={departmentForm.id ? "Salvar alteracoes" : "Cadastrar departamento"} />
+          </form>
+        </AdminModal>
+      )}
+
+      {employeeModalOpen && (
+        <AdminModal
+          title={employeeForm.id ? "Editar funcionario" : "Cadastrar funcionario"}
+          description="Dados do cadastro interno e da conta usada para acessar o Portal."
+          onClose={closeEmployeeModal}
+        >
+          <form onSubmit={saveEmployee} className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField label="Nome completo">
+                <input autoFocus value={employeeForm.fullName} onChange={(event) => setEmployeeForm((current) => ({ ...current, fullName: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="Nome completo" />
+              </FormField>
+              <FormField label="Login do sistema" hint={employeeForm.id ? "Pode ser alterado." : "Se vazio, o sistema gera pelo nome ou e-mail."}>
+                <input value={employeeForm.username} onChange={(event) => setEmployeeForm((current) => ({ ...current, username: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="robson-ferreira-ramos" />
+              </FormField>
+              <FormField label="E-mail">
+                <input type="email" value={employeeForm.email} onChange={(event) => setEmployeeForm((current) => ({ ...current, email: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="funcionario@cartorio.local" />
+              </FormField>
+              <FormField label="CPF" hint="Opcional">
+                <input value={employeeForm.cpf} onChange={(event) => setEmployeeForm((current) => ({ ...current, cpf: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="CPF" />
+              </FormField>
+              <FormField label="Departamento">
+                <select value={employeeForm.departmentId} onChange={(event) => setEmployeeForm((current) => ({ ...current, departmentId: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                  <option value="">Sem departamento</option>
+                  {departments.filter((department) => department.active || department.id === employeeForm.departmentId).map((department) => (
+                    <option key={department.id} value={department.id}>{department.name}</option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Estacao">
+                <select value={employeeForm.stationId} onChange={(event) => setEmployeeForm((current) => ({ ...current, stationId: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                  <option value="">Sem estacao</option>
+                  {stations.map((station) => (
+                    <option key={station.id} value={station.id}>{station.code} - {station.name}</option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Status">
+                <select value={employeeForm.status} onChange={(event) => setEmployeeForm((current) => ({ ...current, status: event.target.value as Employee["status"] }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                  <option value="ACTIVE">Ativo</option>
+                  <option value="INACTIVE">Inativo</option>
+                </select>
+              </FormField>
+              <FormField label="Cargo no sistema">
+                <select value={employeeForm.role} onChange={(event) => setEmployeeForm((current) => ({ ...current, role: event.target.value as AppRole }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                  <option value="usuario">Funcionario</option>
+                  <option value="operador">Operador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </FormField>
+              <FormField label={employeeForm.id ? "Nova senha" : "Senha inicial"} hint={employeeForm.id ? "Deixe vazio para manter a senha atual." : "Se vazio, sera usada a senha padrao 123456."}>
+                <input type="password" value={employeeForm.password} onChange={(event) => setEmployeeForm((current) => ({ ...current, password: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder={employeeForm.id ? "Nova senha" : "Senha inicial"} />
+              </FormField>
+              <FormField label="Confirmar senha">
+                <input type="password" value={employeeForm.passwordConfirmation} onChange={(event) => setEmployeeForm((current) => ({ ...current, passwordConfirmation: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="Repita a senha" />
+              </FormField>
+            </div>
+            <ModalActions onClose={closeEmployeeModal} submitLabel={employeeForm.id ? "Salvar alteracoes" : "Cadastrar funcionario"} />
+          </form>
+        </AdminModal>
       )}
 
       {view === "configuracoes" && (
@@ -1654,6 +1711,68 @@ function ConfigPage({ view }: { view: View }) {
           </section>
         </div>
       )}
+    </div>
+  );
+}
+
+function AdminModal({
+  title,
+  description,
+  children,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/45 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+        <header className="border-b border-slate-200 px-6 py-5">
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
+        </header>
+        <div className="max-h-[82vh] overflow-y-auto p-6">{children}</div>
+      </section>
+    </div>
+  );
+}
+
+function FormField({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="space-y-1.5">
+      <span className="flex flex-wrap items-baseline justify-between gap-2 text-sm font-medium">
+        {label}
+        {hint && <span className="text-xs font-normal text-slate-500">{hint}</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLabel: string }) {
+  return (
+    <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
+      <button type="button" onClick={onClose} className="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50">
+        Cancelar
+      </button>
+      <button className="h-10 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white transition hover:bg-[#0a315f]">
+        {submitLabel}
+      </button>
     </div>
   );
 }

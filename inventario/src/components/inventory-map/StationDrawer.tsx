@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Monitor, Cpu, Mouse, Keyboard, Battery, Headphones, Camera, Laptop, History, Settings, Plus, Unlink, ArrowRightLeft, Package, UserCircle, MessageSquare } from 'lucide-react';
+import { X, Monitor, Cpu, Mouse, Keyboard, Battery, Headphones, Camera, Laptop, Printer, Network, Fingerprint, History, Settings, Plus, Unlink, ArrowRightLeft, Package, UserCircle, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -25,6 +25,9 @@ const assetIcons: Record<string, React.ReactNode> = {
   Headset: <Headphones className="h-4 w-4" />,
   Webcam: <Camera className="h-4 w-4" />,
   Notebook: <Laptop className="h-4 w-4" />,
+  Impressora: <Printer className="h-4 w-4" />,
+  Switch: <Network className="h-4 w-4" />,
+  'Leitor biométrico': <Fingerprint className="h-4 w-4" />,
 };
 
 interface StationDrawerProps {

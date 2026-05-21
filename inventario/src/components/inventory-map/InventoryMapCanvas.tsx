@@ -14,6 +14,9 @@ const COLORS = {
   deskStroke: '#b0bac5',
   chairFill: '#e8ecf0',
   chairStroke: '#9da5b0',
+  equipmentFill: '#f7f8fa',
+  equipmentStroke: '#8793a5',
+  equipmentAccent: '#1e2a3a',
   selectedStroke: '#b8905b',
   hoverStroke: '#c9a97a',
   gridLine: '#dfe3e8',
@@ -226,6 +229,42 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
             {/* Backrest */}
             <Rect x={el.width * 0.15} y={-4} width={el.width * 0.7} height={8}
               fill={COLORS.chairStroke} cornerRadius={4} opacity={0.6} />
+          </Group>
+        );
+
+      case 'PRINTER':
+        return (
+          <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation}
+            draggable={isDraggable} onDragEnd={handleDragEnd}
+            onClick={handleClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+            <Rect x={6} y={0} width={el.width - 12} height={el.height * 0.34}
+              fill="#fff" stroke={COLORS.equipmentStroke} strokeWidth={1} cornerRadius={2} />
+            <Rect x={0} y={el.height * 0.22} width={el.width} height={el.height * 0.5}
+              fill={COLORS.equipmentFill}
+              stroke={selectionStroke || COLORS.equipmentStroke}
+              strokeWidth={selectionWidth || 1.5} cornerRadius={5} />
+            <Rect x={9} y={el.height * 0.58} width={el.width - 18} height={el.height * 0.36}
+              fill="#fff" stroke={COLORS.equipmentStroke} strokeWidth={1} cornerRadius={2} />
+            <Circle x={el.width - 12} y={el.height * 0.39} radius={2.5} fill={COLORS.stationBadge} />
+          </Group>
+        );
+
+      case 'SWITCH':
+        return (
+          <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation}
+            draggable={isDraggable} onDragEnd={handleDragEnd}
+            onClick={handleClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+            <Rect width={el.width} height={el.height}
+              fill={COLORS.equipmentFill}
+              stroke={selectionStroke || COLORS.equipmentStroke}
+              strokeWidth={selectionWidth || 1.5} cornerRadius={5} />
+            <Rect x={8} y={8} width={el.width - 16} height={el.height - 16}
+              fill={COLORS.equipmentAccent} opacity={0.08} cornerRadius={3} />
+            {[0, 1, 2, 3].map(port => (
+              <Rect key={port} x={13 + port * 17} y={el.height / 2 - 4} width={10} height={8}
+                fill="#fff" stroke={COLORS.equipmentStroke} strokeWidth={1} cornerRadius={1} />
+            ))}
+            <Circle x={el.width - 13} y={el.height / 2} radius={3} fill={COLORS.stationBadge} />
           </Group>
         );
 

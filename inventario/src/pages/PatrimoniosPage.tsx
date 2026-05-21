@@ -15,7 +15,7 @@ import { useInventoryStore } from '@/features/inventory-map/store/useInventorySt
 import type { AssetStatus } from '@/features/inventory-map/types/inventoryMap.types';
 import { toast } from 'sonner';
 
-const CATEGORIES = ['CPU', 'Monitor', 'Mouse', 'Teclado', 'Nobreak', 'Headset', 'Webcam', 'Notebook', 'Outro'];
+const CATEGORIES = ['CPU', 'Monitor', 'Mouse', 'Teclado', 'Nobreak', 'Headset', 'Webcam', 'Notebook', 'Impressora', 'Switch', 'Leitor biométrico', 'Outro'];
 const STATUSES: AssetStatus[] = ['ACTIVE', 'IN_STOCK', 'INACTIVE', 'MAINTENANCE', 'DISPOSED'];
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Ativo',

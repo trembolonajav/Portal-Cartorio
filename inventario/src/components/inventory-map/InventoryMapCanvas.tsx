@@ -114,16 +114,24 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
   };
 
   const stations = useInventoryStore(s => s.stations);
+  const assets = useInventoryStore(s => s.assets);
 
   const getStationForElement = (el: LayoutElement) => {
     if (!el.stationId) return null;
     return stations.find(s => s.id === el.stationId) || null;
   };
 
+  const getAssetForElement = (el: LayoutElement) => {
+    const assetId = el.metadata?.assetId;
+    if (assetId === undefined || assetId === null || assetId === '') return null;
+    return assets.find(asset => asset.id === String(assetId)) || null;
+  };
+
   const renderElement = (el: LayoutElement) => {
     const isSelected = selectedElementId === el.id;
     const isHovered = hoveredElementId === el.id;
     const station = getStationForElement(el);
+    const equipmentAsset = getAssetForElement(el);
     const isDraggable = mode === 'EDIT';
     const labelText = station ? station.code : (el.label || '');
     const labelFontSize = labelText.length > 16 ? 8 : labelText.length > 12 ? 9 : el.fontSize || 11;
@@ -246,6 +254,10 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
             <Rect x={9} y={el.height * 0.58} width={el.width - 18} height={el.height * 0.36}
               fill="#fff" stroke={COLORS.equipmentStroke} strokeWidth={1} cornerRadius={2} />
             <Circle x={el.width - 12} y={el.height * 0.39} radius={2.5} fill={COLORS.stationBadge} />
+            {equipmentAsset && (
+              <Text text={equipmentAsset.assetCode} x={4} y={el.height * 0.32} width={el.width - 8}
+                align="center" fontSize={8} fontFamily="Inter" fontStyle="600" fill={COLORS.equipmentAccent} />
+            )}
           </Group>
         );
 
@@ -265,6 +277,10 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
                 fill="#fff" stroke={COLORS.equipmentStroke} strokeWidth={1} cornerRadius={1} />
             ))}
             <Circle x={el.width - 13} y={el.height / 2} radius={3} fill={COLORS.stationBadge} />
+            {equipmentAsset && (
+              <Text text={equipmentAsset.assetCode} x={8} y={el.height - 11} width={el.width - 24}
+                align="left" fontSize={8} fontFamily="Inter" fontStyle="600" ellipsis fill={COLORS.equipmentAccent} />
+            )}
           </Group>
         );
 

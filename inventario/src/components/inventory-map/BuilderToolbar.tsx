@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore } from '@/features/auth/store/useAuthStore';
 import { useInventoryMapStore } from '@/features/inventory-map/store/useInventoryMapStore';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
-import type { ElementType, StationStatus, SpaceType } from '@/features/inventory-map/types/inventoryMap.types';
+import type { ElementType, LayoutElement, StationStatus, SpaceType } from '@/features/inventory-map/types/inventoryMap.types';
 import { toast } from 'sonner';
 
 const toolItems: { type: ElementType; label: string; icon: React.ReactNode }[] = [
@@ -51,11 +51,20 @@ const allowedChildren: Record<SpaceType, SpaceType[]> = {
 
 const navigableTypes = new Set<SpaceType>(['FLOOR', 'SECTOR']);
 const emptySpaceForm = { name: '', type: 'FLOOR' as SpaceType, parentId: undefined as string | undefined };
+const equipmentCategoryByType: Partial<Record<ElementType, string>> = {
+  PRINTER: 'Impressora',
+  SWITCH: 'Switch',
+};
+
+const getElementAssetId = (element: LayoutElement) => {
+  const value = element.metadata?.assetId;
+  return value === undefined || value === null || value === '' ? undefined : String(value);
+};
 
 const BuilderToolbar = () => {
   const isAdmin = useAuthStore(state => state.user?.role === 'ADMIN');
   const { mode, setMode, showGrid, toggleGrid, placingType, startPlacing, cancelPlacing, saveLayout, selectedElementId, layout, activeSpaceId, rotateElement, duplicateElement, deleteElement, updateElement, switchToSpace } = useInventoryMapStore();
-  const { stations, addStation, spaces, getChildSpaces, addSpace, updateSpace, deleteSpace } = useInventoryStore();
+  const { stations, assets, assignments, addStation, spaces, getChildSpaces, addSpace, updateSpace, deleteSpace } = useInventoryStore();
 
   const [createStationOpen, setCreateStationOpen] = useState(false);
   const [stationForm, setStationForm] = useState(emptyStationForm);
@@ -110,6 +119,39 @@ const BuilderToolbar = () => {
   };
 
   const availableStations = stations.filter(station => !layout.elements.some(element => element.stationId === station.id && element.id !== selectedElementId));
+  const selectedElementAssetId = selectedElement ? getElementAssetId(selectedElement) : undefined;
+  const selectedElementAsset = selectedElementAssetId ? assets.find(asset => asset.id === selectedElementAssetId) : undefined;
+  const selectedEquipmentCategory = selectedElement ? equipmentCategoryByType[selectedElement.elementType] : undefined;
+  const mappedAssetIds = new Set(
+    layout.elements
+      .filter(element => element.id !== selectedElementId)
+      .map(getElementAssetId)
+      .filter((assetId): assetId is string => !!assetId)
+  );
+  const availableEquipmentAssets = selectedEquipmentCategory
+    ? assets.filter(asset => {
+      if (asset.id === selectedElementAssetId) return true;
+      if (asset.type !== selectedEquipmentCategory || asset.status === 'DISPOSED') return false;
+      if (mappedAssetIds.has(asset.id)) return false;
+      return !assignments.some(assignment => assignment.assetId === asset.id && assignment.status === 'ACTIVE');
+    })
+    : [];
+
+  const updateEquipmentAsset = (value: string) => {
+    if (!selectedElement || !selectedElementId) return;
+    const metadata = { ...selectedElement.metadata };
+    if (value === '_none') {
+      delete metadata.assetId;
+      updateElement(selectedElementId, { metadata });
+      toast.success('Patrimonio removido do elemento');
+      return;
+    }
+
+    metadata.assetId = value;
+    const asset = assets.find(item => item.id === value);
+    updateElement(selectedElementId, { metadata });
+    if (asset) toast.success(`${selectedEquipmentCategory} vinculado ao patrimonio ${asset.assetCode}`);
+  };
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
@@ -339,6 +381,32 @@ const BuilderToolbar = () => {
                       <Plus className="h-3 w-3 mr-1" />
                       Criar Nova Estação
                     </Button>
+                  </div>
+                )}
+                {selectedEquipmentCategory && (
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <Link2 className="h-3 w-3" />
+                      Vincular Patrimonio
+                    </Label>
+                    <Select value={selectedElementAssetId || '_none'} onValueChange={updateEquipmentAsset}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={`Sem ${selectedEquipmentCategory.toLowerCase()}`} /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Sem patrimonio</SelectItem>
+                        {availableEquipmentAssets.map(asset => (
+                          <SelectItem key={asset.id} value={asset.id}>{asset.assetCode} - {asset.description}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedElementAsset ? (
+                      <div className="rounded-md border border-border bg-secondary/40 p-2 text-[11px] text-muted-foreground">
+                        <p className="font-medium text-foreground">{selectedElementAsset.assetCode} - {selectedElementAsset.description}</p>
+                        <p>{[selectedElementAsset.manufacturer, selectedElementAsset.model].filter(Boolean).join(' - ') || 'Marca e modelo nao informados'}</p>
+                        <p>Status: {selectedElementAsset.status}</p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">Selecione um patrimonio {selectedEquipmentCategory.toLowerCase()} sem vinculo ativo em estacao.</p>
+                    )}
                   </div>
                 )}
               </div>

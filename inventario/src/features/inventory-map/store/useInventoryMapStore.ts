@@ -209,7 +209,18 @@ export const useInventoryMapStore = create<InventoryMapState>((set, get) => ({
     const el = get().layout.elements.find((element) => element.id === id);
     if (!el) return;
     const existingIds = new Set(get().layout.elements.map((element) => element.id));
-    const newEl = { ...el, id: genId(existingIds), x: el.x + 20, y: el.y + 20, stationId: undefined };
+    const metadata = { ...el.metadata };
+    if (el.elementType === 'PRINTER' || el.elementType === 'SWITCH') {
+      delete metadata.assetId;
+    }
+    const newEl = {
+      ...el,
+      id: genId(existingIds),
+      x: el.x + 20,
+      y: el.y + 20,
+      stationId: undefined,
+      metadata,
+    };
     set((s) => ({
       layout: normalizeLayout({ ...s.layout, elements: [...s.layout.elements, newEl] }),
       selectedElementId: newEl.id,

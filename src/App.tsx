@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
+  ArrowLeft,
   BarChart3,
   Bell,
   CalendarDays,
@@ -159,7 +160,7 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
 
   return (
     <main className="grid min-h-screen bg-[#f7f5f2] text-[#071936] lg:grid-cols-[1fr_1.1fr]">
-      <section className="relative flex min-h-[44vh] overflow-hidden bg-[#062449] px-8 py-10 text-white lg:min-h-screen lg:px-20">
+      <section className="relative flex min-h-[44vh] overflow-hidden bg-[#00234B] px-8 py-10 text-white lg:min-h-screen lg:px-20">
         <div className="absolute inset-y-0 right-0 w-px bg-[#d8bd83]" />
         <img
           src="/favicon.png"
@@ -230,7 +231,7 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
               Manter conectado
             </label>
             <button
-              className="h-14 w-full rounded-xl bg-[#062449] text-lg font-semibold text-white shadow-[0_14px_24px_-16px_rgba(6,36,73,0.8)] transition hover:bg-[#0a315f]"
+              className="h-14 w-full rounded-xl bg-[#00234B] text-lg font-semibold text-white shadow-[0_14px_24px_-16px_rgba(6,36,73,0.8)] transition hover:bg-[#0a315f]"
               disabled={loading}
             >
               {loading ? "Entrando..." : "Entrar"}
@@ -261,8 +262,8 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   });
 
   return (
-    <div className="flex min-h-screen bg-[#f7f9fc] text-[#071936]">
-      <aside className="hidden w-[260px] shrink-0 flex-col bg-[#062449] text-white md:flex">
+    <div className="flex min-h-screen bg-[#F5F3F1] text-[#071936]">
+      <aside className="hidden w-[260px] shrink-0 flex-col bg-[#00234B] text-white md:flex">
         <div className="px-4 py-6 text-center">
           <img src="/favicon.png" alt="" className="mx-auto h-20 w-20 rounded-full object-cover" />
           <p className="mt-4 text-base font-semibold tracking-wide">PORTAL ÍNDIO ARTIAGA</p>
@@ -329,13 +330,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
                   setSelectedTicket(null);
                   if (event.target.value.trim() && view !== "chamados") setView("chamados");
                 }}
-                className="h-12 w-72 rounded-lg border border-slate-200 bg-white pl-12 pr-4 text-sm outline-none focus:border-[#062449]"
+                className="h-12 w-72 rounded-lg border border-slate-200 bg-white pl-12 pr-4 text-sm outline-none focus:border-[#00234B]"
                 placeholder="Buscar chamado..."
               />
             </div>
             <div className="relative">
               <Bell className="h-6 w-6" />
-              <span className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-[#062449] text-[11px] font-bold text-white">
+              <span className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-[#00234B] text-[11px] font-bold text-white">
                 3
               </span>
             </div>
@@ -593,7 +594,7 @@ function TicketsPage({
         </p>
         <button
           onClick={() => setNewTicketOpen(true)}
-          className="flex h-12 items-center gap-2 rounded-md bg-[#062449] px-6 font-semibold text-white shadow-sm hover:bg-[#0a315f]"
+          className="flex h-12 items-center gap-2 rounded-md bg-[#00234B] px-6 font-semibold text-white shadow-sm hover:bg-[#0a315f]"
         >
           <Plus className="h-5 w-5" />
           Novo chamado
@@ -696,7 +697,7 @@ function TicketsPage({
           <div className="flex items-center gap-3 py-4">
             <span className="text-sm font-medium">Visualização</span>
             <div className="flex rounded-md border border-slate-200 p-1">
-              <button className="rounded bg-[#062449] p-2 text-white">
+              <button className="rounded bg-[#00234B] p-2 text-white">
                 <List className="h-4 w-4" />
               </button>
               <button className="p-2 text-slate-500">
@@ -776,7 +777,7 @@ function TicketsPage({
               <button
                 key={page}
                 onClick={() => setCurrentPage(page)}
-                className={`h-9 w-9 rounded-md border ${page === currentPage ? "border-[#062449] bg-[#062449] text-white" : "border-slate-200 bg-white"}`}
+                className={`h-9 w-9 rounded-md border ${page === currentPage ? "border-[#00234B] bg-[#00234B] text-white" : "border-slate-200 bg-white"}`}
               >
                 {page}
               </button>
@@ -888,23 +889,29 @@ function TicketDetail({
 
   return (
     <div className="space-y-5">
-      <button
-        onClick={onBack}
-        className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-      >
-        Voltar
-      </button>
+      {/* Barra de navegação do chamado (navy) — artboard 1b */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-[#00234B] px-6 py-4 text-white">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm text-white/70 transition-colors hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Fila de chamados
+        </button>
+        <span className="font-mono text-sm text-[#D7C5AC]">#{ticket.numero}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{ticket.titulo}</span>
+      </div>
+
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         <section className="space-y-5">
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">Chamado #{ticket.numero}</p>
-            <h2 className="mt-1 text-3xl font-semibold">{ticket.titulo}</h2>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={ticket.status} />
               <PriorityBadge priority={ticket.prioridade} />
-              <Badge>{ticket.setor?.nome ?? "-"}</Badge>
-              <Badge>{ticket.categoria?.nome ?? "-"}</Badge>
+              <Badge className="text-slate-600">{ticket.setor?.nome ?? "-"}</Badge>
+              <Badge className="text-slate-600">{ticket.categoria?.nome ?? "-"}</Badge>
             </div>
+            <h2 className="mt-3 text-3xl font-semibold text-[#00234B]">{ticket.titulo}</h2>
             <div className="mt-6 grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
               <Info label="Solicitante" value={ticket.criadoPor.nomeCompleto} />
               <Info
@@ -923,7 +930,7 @@ function TicketDetail({
           <div className="grid gap-5 lg:grid-cols-2">
             <DetailCard title="Anexos">
               {ticket.anexos ? (
-                <p className="font-medium text-[#062449]">{ticket.anexos}</p>
+                <p className="font-medium text-[#00234B]">{ticket.anexos}</p>
               ) : (
                 <p className="text-slate-500">Nenhum anexo enviado.</p>
               )}
@@ -976,13 +983,13 @@ function TicketDetail({
                   value={publicMessage}
                   onChange={(event) => setPublicMessage(event.target.value)}
                   disabled={!canSendPublicComment}
-                  className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449]"
+                  className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#00234B]"
                   placeholder="Mensagem visível ao usuário"
                 />
                 <button
                   onClick={() => sendComment(false)}
                   disabled={!canSendPublicComment}
-                  className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md bg-[#00234B] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Enviar resposta
                 </button>
@@ -997,13 +1004,13 @@ function TicketDetail({
                     value={internalMessage}
                     onChange={(event) => setInternalMessage(event.target.value)}
                     disabled={!canInteract}
-                    className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449] disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#00234B] disabled:cursor-not-allowed disabled:bg-slate-50"
                     placeholder="Anotação interna para operador/admin"
                   />
                   <button
                     onClick={() => sendComment(true)}
                     disabled={!canInteract}
-                    className="rounded-md bg-[#062449] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md bg-[#00234B] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Salvar interno
                   </button>
@@ -1018,7 +1025,7 @@ function TicketDetail({
             <div className="space-y-3">
               <button
                 onClick={assumeTicket}
-                className="h-11 w-full rounded-md bg-[#062449] font-semibold text-white disabled:opacity-50"
+                className="h-11 w-full rounded-md bg-[#00234B] font-semibold text-white disabled:opacity-50"
                 disabled={ticket.atribuidoA?.id === user.id || !canInteract}
               >
                 Assumir chamado
@@ -1057,7 +1064,7 @@ function TicketDetail({
               </label>
               <button
                 onClick={() => setResolutionOpen(true)}
-                className="h-11 w-full rounded-md bg-emerald-600 font-semibold text-white"
+                className="h-11 w-full rounded-md bg-[#2F7A54] font-semibold text-white"
                 disabled={isResolved}
               >
                 Resolver chamado
@@ -1115,7 +1122,7 @@ function TicketDetail({
               </button>
               <button
                 onClick={submitResolution}
-                className="h-11 rounded-md bg-emerald-600 px-5 text-sm font-semibold text-white"
+                className="h-11 rounded-md bg-[#2F7A54] px-5 text-sm font-semibold text-white"
               >
                 Confirmar resolucao
               </button>
@@ -1347,7 +1354,7 @@ function ReportsPage() {
           <DateField label="De" value={dateFrom} onChange={setDateFrom} />
           <DateField label="Até" value={dateTo} onChange={setDateTo} />
           <button type="button" onClick={() => exportRows(rows, `${filename}.csv`, "csv")} className="mt-6 h-11 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50">CSV</button>
-          <button type="button" onClick={() => exportRows(rows, `${filename}.xls`, "xls")} className="mt-6 h-11 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white">Excel</button>
+          <button type="button" onClick={() => exportRows(rows, `${filename}.xls`, "xls")} className="mt-6 h-11 rounded-md bg-[#00234B] px-4 text-sm font-semibold text-white">Excel</button>
         </div>
       </section>
 
@@ -1562,7 +1569,7 @@ function ConfigPage({ view }: { view: View }) {
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5">
             <h3 className="font-semibold">Departamentos</h3>
-            <button type="button" onClick={() => openDepartmentModal()} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a315f]">
+            <button type="button" onClick={() => openDepartmentModal()} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#00234B] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a315f]">
               <Plus className="h-4 w-4" />
               Cadastrar departamento
             </button>
@@ -1584,7 +1591,7 @@ function ConfigPage({ view }: { view: View }) {
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5">
             <h3 className="font-semibold">Funcionarios</h3>
-            <button type="button" onClick={openNewEmployeeModal} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a315f]">
+            <button type="button" onClick={openNewEmployeeModal} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#00234B] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a315f]">
               <Plus className="h-4 w-4" />
               Cadastrar funcionario
             </button>
@@ -1619,7 +1626,7 @@ function ConfigPage({ view }: { view: View }) {
                 autoFocus
                 value={departmentForm.name}
                 onChange={(event) => setDepartmentForm((current) => ({ ...current, name: event.target.value }))}
-                className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+                className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]"
                 placeholder="Reconhecimento de firma"
               />
             </FormField>
@@ -1637,19 +1644,19 @@ function ConfigPage({ view }: { view: View }) {
           <form onSubmit={saveEmployee} className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <FormField label="Nome completo">
-                <input autoFocus value={employeeForm.fullName} onChange={(event) => setEmployeeForm((current) => ({ ...current, fullName: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="Nome completo" />
+                <input autoFocus value={employeeForm.fullName} onChange={(event) => setEmployeeForm((current) => ({ ...current, fullName: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder="Nome completo" />
               </FormField>
               <FormField label="Login do sistema" hint={employeeForm.id ? "Pode ser alterado." : "Se vazio, o sistema gera pelo nome ou e-mail."}>
-                <input value={employeeForm.username} onChange={(event) => setEmployeeForm((current) => ({ ...current, username: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="robson-ferreira-ramos" />
+                <input value={employeeForm.username} onChange={(event) => setEmployeeForm((current) => ({ ...current, username: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder="robson-ferreira-ramos" />
               </FormField>
               <FormField label="E-mail">
-                <input type="email" value={employeeForm.email} onChange={(event) => setEmployeeForm((current) => ({ ...current, email: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="funcionario@cartorio.local" />
+                <input type="email" value={employeeForm.email} onChange={(event) => setEmployeeForm((current) => ({ ...current, email: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder="funcionario@cartorio.local" />
               </FormField>
               <FormField label="CPF" hint="Opcional">
-                <input value={employeeForm.cpf} onChange={(event) => setEmployeeForm((current) => ({ ...current, cpf: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="CPF" />
+                <input value={employeeForm.cpf} onChange={(event) => setEmployeeForm((current) => ({ ...current, cpf: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder="CPF" />
               </FormField>
               <FormField label="Departamento">
-                <select value={employeeForm.departmentId} onChange={(event) => setEmployeeForm((current) => ({ ...current, departmentId: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                <select value={employeeForm.departmentId} onChange={(event) => setEmployeeForm((current) => ({ ...current, departmentId: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]">
                   <option value="">Sem departamento</option>
                   {departments.filter((department) => department.active || department.id === employeeForm.departmentId).map((department) => (
                     <option key={department.id} value={department.id}>{department.name}</option>
@@ -1657,7 +1664,7 @@ function ConfigPage({ view }: { view: View }) {
                 </select>
               </FormField>
               <FormField label="Estacao">
-                <select value={employeeForm.stationId} onChange={(event) => setEmployeeForm((current) => ({ ...current, stationId: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                <select value={employeeForm.stationId} onChange={(event) => setEmployeeForm((current) => ({ ...current, stationId: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]">
                   <option value="">Sem estacao</option>
                   {stations.map((station) => (
                     <option key={station.id} value={station.id}>{station.code} - {station.name}</option>
@@ -1665,23 +1672,23 @@ function ConfigPage({ view }: { view: View }) {
                 </select>
               </FormField>
               <FormField label="Status">
-                <select value={employeeForm.status} onChange={(event) => setEmployeeForm((current) => ({ ...current, status: event.target.value as Employee["status"] }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                <select value={employeeForm.status} onChange={(event) => setEmployeeForm((current) => ({ ...current, status: event.target.value as Employee["status"] }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]">
                   <option value="ACTIVE">Ativo</option>
                   <option value="INACTIVE">Inativo</option>
                 </select>
               </FormField>
               <FormField label="Cargo no sistema">
-                <select value={employeeForm.role} onChange={(event) => setEmployeeForm((current) => ({ ...current, role: event.target.value as AppRole }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]">
+                <select value={employeeForm.role} onChange={(event) => setEmployeeForm((current) => ({ ...current, role: event.target.value as AppRole }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]">
                   <option value="usuario">Funcionario</option>
                   <option value="operador">Operador</option>
                   <option value="admin">Administrador</option>
                 </select>
               </FormField>
               <FormField label={employeeForm.id ? "Nova senha" : "Senha inicial"} hint={employeeForm.id ? "Deixe vazio para manter a senha atual." : "Se vazio, sera usada a senha padrao 123456."}>
-                <input type="password" value={employeeForm.password} onChange={(event) => setEmployeeForm((current) => ({ ...current, password: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder={employeeForm.id ? "Nova senha" : "Senha inicial"} />
+                <input type="password" value={employeeForm.password} onChange={(event) => setEmployeeForm((current) => ({ ...current, password: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder={employeeForm.id ? "Nova senha" : "Senha inicial"} />
               </FormField>
               <FormField label="Confirmar senha">
-                <input type="password" value={employeeForm.passwordConfirmation} onChange={(event) => setEmployeeForm((current) => ({ ...current, passwordConfirmation: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]" placeholder="Repita a senha" />
+                <input type="password" value={employeeForm.passwordConfirmation} onChange={(event) => setEmployeeForm((current) => ({ ...current, passwordConfirmation: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder="Repita a senha" />
               </FormField>
             </div>
             <ModalActions onClose={closeEmployeeModal} submitLabel={employeeForm.id ? "Salvar alteracoes" : "Cadastrar funcionario"} />
@@ -1770,7 +1777,7 @@ function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLab
       <button type="button" onClick={onClose} className="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50">
         Cancelar
       </button>
-      <button className="h-10 rounded-md bg-[#062449] px-4 text-sm font-semibold text-white transition hover:bg-[#0a315f]">
+      <button className="h-10 rounded-md bg-[#00234B] px-4 text-sm font-semibold text-white transition hover:bg-[#0a315f]">
         {submitLabel}
       </button>
     </div>
@@ -1988,7 +1995,7 @@ function NewTicketModal({
             <input
               value={titulo}
               onChange={(event) => setTitulo(event.target.value)}
-              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]"
               placeholder="Impressora da procuração não imprime"
             />
           </label>
@@ -2021,7 +2028,7 @@ function NewTicketModal({
             <input
               value={equipamentoRelacionado}
               onChange={(event) => setEquipamentoRelacionado(event.target.value)}
-              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]"
               placeholder="Impressora Konica - PROC-02"
             />
           </label>
@@ -2030,7 +2037,7 @@ function NewTicketModal({
             <textarea
               value={descricao}
               onChange={(event) => setDescricao(event.target.value)}
-              className="min-h-36 w-full rounded-md border border-slate-200 p-3 outline-none focus:border-[#062449]"
+              className="min-h-36 w-full rounded-md border border-slate-200 p-3 outline-none focus:border-[#00234B]"
               placeholder="Explique o que está acontecendo, quando começou e se aparece alguma mensagem de erro."
             />
           </label>
@@ -2039,7 +2046,7 @@ function NewTicketModal({
             <input
               value={anexos}
               onChange={(event) => setAnexos(event.target.value)}
-              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#062449]"
+              className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]"
               placeholder="imagem-erro.jpg, log.pdf"
             />
           </label>
@@ -2054,7 +2061,7 @@ function NewTicketModal({
             Cancelar
           </button>
           <button
-            className="h-10 rounded-md bg-[#062449] px-5 font-semibold text-white"
+            className="h-10 rounded-md bg-[#00234B] px-5 font-semibold text-white"
             disabled={submitting}
           >
             {submitting ? "Abrindo..." : "Abrir chamado"}
@@ -2100,7 +2107,7 @@ function ResolutionField({
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-20 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#062449]"
+        className="min-h-20 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#00234B]"
         placeholder={placeholder}
       />
     </label>
@@ -2110,7 +2117,7 @@ function ResolutionField({
 function TimelineItem({ date, text }: { date: string | null; text: string }) {
   return (
     <div className="flex gap-3">
-      <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#062449]" />
+      <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#00234B]" />
       <p className="text-sm text-slate-700">
         <span className="font-medium text-slate-900">{formatDateTime(date)}</span> — {text}
       </p>
@@ -2241,27 +2248,30 @@ function StatCard({
   icon: LucideIcon;
   tone: "blue" | "amber" | "red" | "emerald" | "violet";
 }) {
-  const tones = {
-    blue: "from-[#0b4f8f] to-[#0c3563]",
-    amber: "from-[#efc24b] to-[#d89a08]",
-    red: "from-[#f06464] to-[#dd333a]",
-    emerald: "from-[#55c886] to-[#2fa866]",
-    violet: "from-[#8f7cc9] to-[#6854aa]",
-  };
+  const toneColor = {
+    blue: "#2E5AAC",
+    amber: "#A87413",
+    red: "#B4342B",
+    emerald: "#2F7A54",
+    violet: "#6854AA",
+  }[tone];
+  const valueColor = tone === "red" ? "#B4342B" : "#00234B";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex items-center gap-5">
-        <div
-          className={`grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br text-white ${tones[tone]}`}
-        >
-          <Icon className="h-8 w-8" />
-        </div>
-        <div>
-          <p className="text-base text-slate-700">{label}</p>
-          <p className="mt-1 text-4xl font-semibold tracking-[-0.02em]">{value}</p>
-          <p className="mt-1 text-base text-slate-500">{suffix}</p>
-        </div>
+    <div
+      className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-5"
+      style={{ boxShadow: `inset 3px 0 0 ${toneColor}` }}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">{label}</span>
+        <Icon className="h-4 w-4" style={{ color: toneColor }} />
       </div>
+      <span
+        className="font-mono text-[32px] font-medium leading-none"
+        style={{ color: valueColor, fontVariantNumeric: "tabular-nums" }}
+      >
+        {value}
+      </span>
+      <span className="text-xs text-slate-500">{suffix}</span>
     </div>
   );
 }
@@ -2364,27 +2374,27 @@ function Tab({
 
 function StatusBadge({ status }: { status: TicketStatus }) {
   const classes = {
-    aberto: "bg-amber-50 text-amber-700",
-    em_analise: "bg-blue-50 text-blue-700",
-    em_andamento: "bg-blue-100 text-blue-700",
-    aguardando_solicitante: "bg-violet-100 text-violet-700",
-    resolvido: "bg-emerald-100 text-emerald-700",
+    aberto: "border-[#D2DEF3] bg-[#EDF2FB] text-[#2E5AAC]",
+    em_analise: "border-[#D2DEF3] bg-[#EDF2FB] text-[#2E5AAC]",
+    em_andamento: "border-[#EBDCBB] bg-[#FBF4E6] text-[#A87413]",
+    aguardando_solicitante: "border-violet-200 bg-violet-50 text-violet-700",
+    resolvido: "border-[#CFE5D8] bg-[#EDF6F0] text-[#2F7A54]",
   };
   return <Badge className={classes[status]}>{STATUS_LABEL[status]}</Badge>;
 }
 
 function PriorityBadge({ priority }: { priority: TicketPriority }) {
   const classes = {
-    baixa: "bg-emerald-100 text-emerald-700",
-    media: "bg-orange-100 text-orange-700",
-    alta: "bg-red-100 text-red-700",
+    baixa: "border-[#E4E0DB] bg-[#F3F1EE] text-[#5C6675]",
+    media: "border-[#EBDCBB] bg-[#FBF4E6] text-[#A87413]",
+    alta: "border-[#F0D4D1] bg-[#FBEDEC] text-[#B4342B]",
   };
   return <Badge className={classes[priority]}>{PRIORITY_LABEL[priority]}</Badge>;
 }
 
 function Badge({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
-    <span className={`inline-flex rounded-md px-3 py-1 text-sm font-medium ${className}`}>
+    <span className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${className}`}>
       {children}
     </span>
   );

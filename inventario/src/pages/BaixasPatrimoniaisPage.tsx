@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileDown, FileText, Plus, Search, Upload, CheckCircle2, XCircle } from 'lucide-react';
+import { FileDown, Plus, Search, Upload, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import SessionActions from '@/components/layout/SessionActions';
+import AppShell from '@/components/layout/AppShell';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import { getCurrentUsername, getStoredAuth } from '@/lib/auth';
 import { inventoryApi, type ApiAssetDisposal, type ApiDisposalReason, type ApiDisposalStatus } from '@/lib/inventory-api';
@@ -55,7 +54,6 @@ const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDa
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString('pt-BR') : '-';
 
 const BaixasPatrimoniaisPage = () => {
-  const navigate = useNavigate();
   const { assets, getStationForAsset, getEmployeeForStation, refreshAll } = useInventoryStore();
   const [disposals, setDisposals] = useState<ApiAssetDisposal[]>([]);
   const [selected, setSelected] = useState<ApiAssetDisposal | null>(null);
@@ -216,28 +214,21 @@ const BaixasPatrimoniaisPage = () => {
   const selectedIds = selectedAssets;
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-14 bg-primary border-b-[3px] border-bronze flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="text-primary-foreground/70 hover:text-primary-foreground p-1 h-auto" onClick={() => navigate('/')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <FileText className="h-5 w-5 text-bronze" />
-          <h1 className="text-primary-foreground font-semibold text-sm tracking-wide">Baixas Patrimoniais</h1>
-          <span className="text-primary-foreground/40 text-xs">|</span>
-          <span className="text-primary-foreground/60 text-xs font-medium">{disposals.length} registros</span>
+    <AppShell
+      active="baixas"
+      actions={
+        <Button size="sm" onClick={openNew} className="h-[38px]">
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Nova baixa
+        </Button>
+      }
+    >
+      <div className="flex-1 space-y-5 overflow-auto px-4 py-6 md:px-7">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-serif text-[34px] font-semibold leading-none text-primary">Baixas patrimoniais</h2>
+          <p className="text-sm text-muted-foreground">{disposals.length} registros · termos de baixa e destinação</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={openNew} className="text-xs">
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Nova baixa
-          </Button>
-          <SessionActions />
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-auto p-6 space-y-5">
-        <section className="rounded-lg border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -270,7 +261,7 @@ const BaixasPatrimoniaisPage = () => {
             </TableBody>
           </Table>
         </section>
-      </main>
+      </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -454,7 +445,7 @@ const BaixasPatrimoniaisPage = () => {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </AppShell>
   );
 };
 

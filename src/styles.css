@@ -64,7 +64,26 @@
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
   --color-primary-glow: var(--primary-glow);
+  --font-sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
   --font-serif: "Cormorant Garamond", "Playfair Display", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /*
+   * Remapeia a escala "slate" do Tailwind para os tons quentes de papel/taupe
+   * da proposta de design — unifica o app de Chamados com o Inventário sem
+   * precisar reescrever ~160 classes slate-* espalhadas.
+   */
+  --color-slate-50: #faf9f7;
+  --color-slate-100: #f2efea;
+  --color-slate-200: #e4e0db;
+  --color-slate-300: #d6d1ca;
+  --color-slate-400: #9aa1ab;
+  --color-slate-500: #6b7480;
+  --color-slate-600: #4a5464;
+  --color-slate-700: #3d4653;
+  --color-slate-800: #29323f;
+  --color-slate-900: #1b2430;
+  --color-slate-950: #131a24;
 }
 
 :root {
@@ -150,5 +169,12 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    letter-spacing: -0.005em;
   }
 }

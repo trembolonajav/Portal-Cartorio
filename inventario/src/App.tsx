@@ -11,6 +11,9 @@ import PatrimoniosPage from "./pages/PatrimoniosPage";
 import EspacosPage from "./pages/EspacosPage";
 import ImportarPage from "./pages/ImportarPage";
 import BaixasPatrimoniaisPage from "./pages/BaixasPatrimoniaisPage";
+import DepartamentosPage from "./pages/DepartamentosPage";
+import FuncionariosPage from "./pages/FuncionariosPage";
+import ArquivoPage from "./pages/ArquivoPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -104,9 +107,10 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><InventoryMapPage /></ProtectedRoute>} />
             <Route path="/patrimonios" element={<ProtectedRoute><PatrimoniosPage /></ProtectedRoute>} />
             <Route path="/baixas-patrimoniais" element={<ProtectedRoute><BaixasPatrimoniaisPage /></ProtectedRoute>} />
-            <Route path="/departamentos" element={<Navigate to="/" replace />} />
-            <Route path="/funcionarios" element={<Navigate to="/" replace />} />
+            <Route path="/departamentos" element={<ProtectedRoute><DepartamentosPage /></ProtectedRoute>} />
+            <Route path="/funcionarios" element={<ProtectedRoute><FuncionariosPage /></ProtectedRoute>} />
             <Route path="/espacos" element={<ProtectedRoute><EspacosPage /></ProtectedRoute>} />
+            <Route path="/arquivo" element={<ProtectedRoute><AdminRoute><ArquivoPage /></AdminRoute></ProtectedRoute>} />
             <Route path="/importar" element={<ProtectedRoute><AdminRoute><ImportarPage /></AdminRoute></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

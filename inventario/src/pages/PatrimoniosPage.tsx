@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Search, Pencil, Trash2, MapPin, Package, UserCircle, Building2, Unlink, Upload, FileText } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, MapPin, Package, UserCircle, Building2, Unlink, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import SessionActions from '@/components/layout/SessionActions';
+import AppShell from '@/components/layout/AppShell';
 import { useAuthStore } from '@/features/auth/store/useAuthStore';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { AssetStatus } from '@/features/inventory-map/types/inventoryMap.types';
@@ -23,6 +23,14 @@ const STATUS_LABELS: Record<string, string> = {
   MAINTENANCE: 'Manutenção',
   DISPOSED: 'Baixado',
   IN_STOCK: 'Em Estoque',
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  ACTIVE: 'border-success/30 bg-success/10 text-success',
+  IN_STOCK: 'border-info/30 bg-info/10 text-info',
+  MAINTENANCE: 'border-brass/30 bg-brass/10 text-brass',
+  DISPOSED: 'border-danger/30 bg-danger/10 text-danger',
+  INACTIVE: 'border-border bg-muted text-muted-foreground',
 };
 
 const emptyForm = {
@@ -180,195 +188,197 @@ const PatrimoniosPage = () => {
 
   const activeFiltersCount = [filterStation, filterEmployee, filterDepartment, filterBinding].filter(value => value !== 'ALL').length;
 
+  const linkedCount = assets.filter(asset => assetStationMap.has(asset.id)).length;
+  const unlinkedCount = assets.length - linkedCount;
+
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-14 bg-primary border-b-[3px] border-bronze flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="text-primary-foreground/70 hover:text-primary-foreground p-1 h-auto" onClick={() => navigate('/')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <Package className="h-5 w-5 text-bronze" />
-          <h1 className="text-primary-foreground font-semibold text-sm tracking-wide">Patrimônios</h1>
-          <span className="text-primary-foreground/40 text-xs">|</span>
-          <span className="text-primary-foreground/60 text-xs font-medium">{assets.length} itens</span>
+    <AppShell
+      active="patrimonios"
+      search={
+        <div className="relative flex h-[38px] w-full max-w-[460px] items-center">
+          <Search className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground/70" />
+          <Input
+            placeholder="Buscar por código, série, modelo ou pessoa"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-[38px] rounded-lg border-input bg-paper-2 pl-9 text-sm"
+          />
         </div>
-        <div className="flex items-center gap-2">
+      }
+      actions={
+        <>
           {isAdmin && (
-            <Button size="sm" variant="ghost" onClick={() => navigate('/importar')} className="text-xs text-primary-foreground/70 hover:text-primary-foreground">
-              <Upload className="h-3.5 w-3.5 mr-1.5" />
+            <Button size="sm" variant="outline" onClick={() => navigate('/importar')} className="h-[38px]">
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
               Importar
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => navigate('/baixas-patrimoniais')} className="text-xs text-primary-foreground/70 hover:text-primary-foreground">
-            <FileText className="h-3.5 w-3.5 mr-1.5" />
-            Baixas
+          <Button size="sm" onClick={openNew} className="h-[38px]">
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Novo patrimônio
           </Button>
-          <Button size="sm" variant="secondary" onClick={openNew} className="text-xs">
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Novo Patrimônio
-          </Button>
-          <SessionActions />
-        </div>
-      </header>
-
-      <div className="px-6 py-3 border-b border-border bg-card flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por código, nome ou tipo..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9 text-sm" />
-        </div>
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-[150px] h-9 text-sm"><SelectValue placeholder="Categoria" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todas categorias</SelectItem>
-            {CATEGORIES.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[150px] h-9 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos status</SelectItem>
-            {STATUSES.map(status => <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterBinding} onValueChange={setFilterBinding}>
-          <SelectTrigger className="w-[150px] h-9 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos vínculos</SelectItem>
-            <SelectItem value="LINKED">Vinculados</SelectItem>
-            <SelectItem value="UNLINKED">Sem vínculo</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="px-6 py-2 border-b border-border bg-card/50 flex items-center gap-3 flex-wrap">
-        <Select value={filterStation} onValueChange={setFilterStation}>
-          <SelectTrigger className="w-[170px] h-8 text-xs"><MapPin className="h-3 w-3 mr-1 shrink-0" /><SelectValue placeholder="Estação" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todas estações</SelectItem>
-            {stations.map(station => <SelectItem key={station.id} value={station.id}>{station.code} - {station.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-          <SelectTrigger className="w-[180px] h-8 text-xs"><UserCircle className="h-3 w-3 mr-1 shrink-0" /><SelectValue placeholder="Funcionário" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos funcionários</SelectItem>
-            {employees.filter(employee => employee.status === 'ACTIVE').map(employee => (
-              <SelectItem key={employee.id} value={employee.id}>{employee.fullName}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-          <SelectTrigger className="w-[170px] h-8 text-xs"><Building2 className="h-3 w-3 mr-1 shrink-0" /><SelectValue placeholder="Departamento" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos departamentos</SelectItem>
-            {departments.map(department => <SelectItem key={department.id} value={department.id}>{department.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {activeFiltersCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs text-muted-foreground"
-            onClick={() => {
-              setFilterStation('ALL');
-              setFilterEmployee('ALL');
-              setFilterDepartment('ALL');
-              setFilterBinding('ALL');
-            }}
-          >
-            Limpar filtros ({activeFiltersCount})
-          </Button>
-        )}
-        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} resultado(s)</span>
-      </div>
-
-      <div className="flex-1 overflow-auto px-6 py-4">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <Package className="h-10 w-10 mb-3 opacity-40" />
-            <p className="text-sm font-medium">Nenhum patrimônio encontrado</p>
-            <p className="text-xs mt-1">Ajuste os filtros ou cadastre um novo item</p>
+        </>
+      }
+    >
+      <div className="flex h-full flex-col gap-4 px-4 py-6 md:px-7">
+        {/* Cabeçalho da página */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-serif text-[34px] font-semibold leading-none text-primary">Patrimônios</h2>
+            <p className="text-sm text-muted-foreground">
+              {assets.length.toLocaleString('pt-BR')} itens · {linkedCount.toLocaleString('pt-BR')} vinculados a uma estação · {unlinkedCount.toLocaleString('pt-BR')} sem localização
+            </p>
           </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[120px]">Código</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead className="w-[100px]">Categoria</TableHead>
-                <TableHead className="w-[130px]">Nº Série</TableHead>
-                <TableHead className="w-[110px]">Status</TableHead>
-                <TableHead className="w-[130px]">Estação</TableHead>
-                <TableHead className="w-[140px]">Responsável</TableHead>
-                <TableHead className="w-[80px]">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(asset => {
-                const station = getStationForAsset(asset.id);
-                const employee = station ? getEmployeeForStation(station.id) : null;
-                return (
-                  <TableRow key={asset.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{asset.assetCode}</span>
-                        {asset.origin === 'LEGACY_GLPI' && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[9px] px-1.5 py-0">Legado</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium text-sm">{asset.description}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{asset.type}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono">{asset.serialNumber || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={
-                        asset.status === 'ACTIVE' ? 'bg-success/10 text-success border-success/20' :
-                        asset.status === 'IN_STOCK' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                        asset.status === 'MAINTENANCE' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                        asset.status === 'DISPOSED' ? 'bg-destructive/10 text-destructive border-destructive/20' :
-                        'bg-muted text-muted-foreground border-border'
-                      }>
-                        {STATUS_LABELS[asset.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {station ? (
-                        <span className="flex items-center gap-1 text-xs">
-                          <MapPin className="h-3 w-3 text-bronze" />
-                          {station.code}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground italic">
-                          <Unlink className="h-3 w-3" />
-                          Não vinculado
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {employee ? (
-                        <span className="text-xs">{employee.fullName}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(asset.id)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        {isAdmin && (
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteId(asset.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
+          <div className="flex rounded-[9px] bg-secondary p-[3px] text-[13px]">
+            <span className="rounded-[7px] bg-card px-4 py-2 font-semibold text-primary shadow-sm">Lista</span>
+            <button type="button" className="rounded-[7px] px-4 py-2 text-muted-foreground transition-colors hover:text-primary" onClick={() => navigate('/')}>Mapa</button>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="h-[34px] w-[150px] bg-card text-[13px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas categorias</SelectItem>
+              {CATEGORIES.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-[34px] w-[140px] bg-card text-[13px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos status</SelectItem>
+              {STATUSES.map(status => <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterBinding} onValueChange={setFilterBinding}>
+            <SelectTrigger className="h-[34px] w-[140px] bg-card text-[13px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos vínculos</SelectItem>
+              <SelectItem value="LINKED">Vinculados</SelectItem>
+              <SelectItem value="UNLINKED">Sem vínculo</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="mx-1 hidden h-[22px] w-px bg-border lg:block" />
+          <Select value={filterStation} onValueChange={setFilterStation}>
+            <SelectTrigger className="h-[34px] w-[160px] bg-card text-[13px]"><MapPin className="mr-1 h-3.5 w-3.5 shrink-0 text-brass-ink" /><SelectValue placeholder="Estação" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas estações</SelectItem>
+              {stations.map(station => <SelectItem key={station.id} value={station.id}>{station.code} - {station.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterEmployee} onValueChange={setFilterEmployee}>
+            <SelectTrigger className="h-[34px] w-[170px] bg-card text-[13px]"><UserCircle className="mr-1 h-3.5 w-3.5 shrink-0 text-brass-ink" /><SelectValue placeholder="Responsável" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos funcionários</SelectItem>
+              {employees.filter(employee => employee.status === 'ACTIVE').map(employee => (
+                <SelectItem key={employee.id} value={employee.id}>{employee.fullName}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+            <SelectTrigger className="h-[34px] w-[160px] bg-card text-[13px]"><Building2 className="mr-1 h-3.5 w-3.5 shrink-0 text-brass-ink" /><SelectValue placeholder="Departamento" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos departamentos</SelectItem>
+              {departments.map(department => <SelectItem key={department.id} value={department.id}>{department.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {activeFiltersCount > 0 && (
+            <button
+              type="button"
+              className="text-[13px] text-brass-ink underline underline-offset-2 hover:text-brass"
+              onClick={() => {
+                setFilterStation('ALL');
+                setFilterEmployee('ALL');
+                setFilterDepartment('ALL');
+                setFilterBinding('ALL');
+              }}
+            >
+              Limpar tudo
+            </button>
+          )}
+          <span className="ml-auto text-[13px] text-muted-foreground">{filtered.length.toLocaleString('pt-BR')} resultado(s)</span>
+        </div>
+
+        {/* Tabela */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+          {filtered.length === 0 ? (
+            <div className="flex h-64 flex-col items-center justify-center text-muted-foreground">
+              <Package className="mb-3 h-10 w-10 opacity-40" />
+              <p className="text-sm font-medium">Nenhum patrimônio encontrado</p>
+              <p className="mt-1 text-xs">Ajuste os filtros ou cadastre um novo item</p>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b border-border bg-paper-2 hover:bg-paper-2">
+                    <TableHead className="w-[120px] text-[12px] uppercase tracking-[0.05em] text-muted-foreground">Código</TableHead>
+                    <TableHead className="text-[12px] uppercase tracking-[0.05em] text-muted-foreground">Descrição</TableHead>
+                    <TableHead className="w-[120px] text-[12px] uppercase tracking-[0.05em] text-muted-foreground">Categoria</TableHead>
+                    <TableHead className="w-[130px] text-[12px] uppercase tracking-[0.05em] text-muted-foreground">Status</TableHead>
+                    <TableHead className="w-[220px] text-[12px] uppercase tracking-[0.05em] text-muted-foreground">Localização</TableHead>
+                    <TableHead className="w-[160px] text-[12px] uppercase tracking-[0.05em] text-muted-foreground">Responsável</TableHead>
+                    <TableHead className="w-[70px]" />
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
+                </TableHeader>
+                <TableBody>
+                  {filtered.map(asset => {
+                    const station = getStationForAsset(asset.id);
+                    const employee = station ? getEmployeeForStation(station.id) : null;
+                    return (
+                      <TableRow key={asset.id} className="border-b border-border/60">
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <span className="num-mono text-[13px] text-primary">{asset.assetCode}</span>
+                            {asset.origin === 'LEGACY_GLPI' && (
+                              <Badge variant="outline" className="border-info/30 bg-info/10 px-1.5 py-0 text-[9px] text-info">Legado</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-[14px] text-ink">{asset.description}</TableCell>
+                        <TableCell className="text-[13px] text-muted-foreground">{asset.type}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={STATUS_BADGE[asset.status] ?? STATUS_BADGE.INACTIVE}>
+                            {STATUS_LABELS[asset.status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {station ? (
+                            <span className="flex items-center gap-2 text-[13px] text-brass-ink">
+                              <span className="h-1.5 w-1.5 rounded-full bg-brass-ink" />
+                              {station.code}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-2 text-[13px] italic text-muted-foreground">
+                              <Unlink className="h-3 w-3" />
+                              Sem localização
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-[13px] text-ink-2">
+                          {employee ? employee.fullName : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(asset.id)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            {isAdmin && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteId(asset.id)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -448,7 +458,7 @@ const PatrimoniosPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AppShell>
   );
 };
 

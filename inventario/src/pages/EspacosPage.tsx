@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import SessionActions from '@/components/layout/SessionActions';
+import AppShell from '@/components/layout/AppShell';
 import { useAuthStore } from '@/features/auth/store/useAuthStore';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { SpaceType } from '@/features/inventory-map/types/inventoryMap.types';
@@ -179,29 +179,23 @@ const EspacosPage = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <header className="h-14 bg-primary border-b-[3px] border-bronze flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="text-primary-foreground/70 hover:text-primary-foreground" onClick={() => navigate('/')}>
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Voltar
+    <AppShell
+      active="espacos"
+      actions={
+        isAdmin && (
+          <Button size="sm" onClick={() => openCreate()} className="h-[38px]">
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Nova unidade
           </Button>
-          <MapPin className="h-5 w-5 text-bronze" />
-          <h1 className="text-primary-foreground font-semibold text-sm tracking-wide">Hierarquia de Espaços</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Button size="sm" variant="secondary" onClick={() => openCreate()}>
-              <Plus className="h-4 w-4 mr-1" />
-              Nova Unidade
-            </Button>
-          )}
-          <SessionActions />
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl mx-auto">
+        )
+      }
+    >
+      <div className="flex-1 overflow-y-auto px-4 py-6 md:px-7">
+        <div className="mx-auto max-w-3xl space-y-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-serif text-[34px] font-semibold leading-none text-primary">Espaços e estações</h2>
+            <p className="text-sm text-muted-foreground">Hierarquia de unidades, andares e setores</p>
+          </div>
           {rootSpaces.length === 0 ? (
             <div className="text-center py-16">
               <Building className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
@@ -270,7 +264,7 @@ const EspacosPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AppShell>
   );
 };
 

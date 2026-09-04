@@ -1,97 +1,121 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Cartório Índio Artiaga — design system (proposta "shell unificado").
+ * Paleta: navy #00234B · champagne #D7C5AC · latão #A87413 · papel #F5F3F1.
+ * Tipografia: Cormorant Garamond (títulos) · Instrument Sans (corpo) · IBM Plex Mono (rótulos/números).
+ * Tokens em HSL para casar com o restante do shadcn (hsl(var(--token))).
+ */
+
 @layer base {
   :root {
-    --background: 40 30% 97%;
-    --foreground: 220 40% 13%;
+    --background: 40 14% 95%;        /* papel #F5F3F1 */
+    --canvas: 40 10% 90%;            /* fundo atrás dos cards #E8E5E0 */
+    --foreground: 214 28% 15%;       /* tinta #1B2430 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 40% 13%;
+    --card: 0 0% 100%;               /* branco */
+    --card-foreground: 214 28% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 40% 13%;
+    --popover-foreground: 214 28% 15%;
 
-    --primary: 220 40% 13%;
-    --primary-foreground: 40 30% 97%;
+    --primary: 212 100% 15%;         /* navy #00234B */
+    --primary-foreground: 40 33% 96%;
 
-    --secondary: 38 35% 93%;
-    --secondary-foreground: 220 40% 13%;
+    --secondary: 40 20% 94%;
+    --secondary-foreground: 212 100% 15%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 46%;
+    --muted: 40 14% 93%;
+    --muted-foreground: 215 9% 46%;  /* #6B7480 */
 
-    --accent: 35 45% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 38 35% 76%;            /* champagne #D7C5AC */
+    --accent-foreground: 212 100% 15%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 4 61% 44%;        /* vermelho #B4342B */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 220 40% 13%;
+    --border: 36 14% 88%;            /* #E4E0DB */
+    --input: 36 13% 86%;             /* #DEDAD3 */
+    --ring: 212 100% 15%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-
-    --bronze: 35 45% 55%;
-    --bronze-light: 35 40% 70%;
-    --navy: 220 40% 13%;
-    --navy-light: 220 25% 25%;
-    --cream: 40 30% 97%;
-    --success: 152 60% 40%;
+    /* Brand / status */
+    --navy: 212 100% 15%;            /* #00234B */
+    --navy-light: 214 45% 28%;
+    --champagne: 38 35% 76%;         /* #D7C5AC */
+    --brass: 39 80% 37%;             /* #A87413 latão */
+    --brass-ink: 39 46% 37%;         /* #8A6E32 rótulos */
+    --paper: 40 14% 95%;
+    --paper-2: 40 20% 97%;           /* #FAF9F7 */
+    --ink: 214 28% 15%;              /* #1B2430 */
+    --ink-2: 214 18% 28%;            /* #3D4653 */
+    --info: 219 58% 43%;             /* #2E5AAC azul */
+    --success: 149 44% 33%;          /* #2F7A54 verde */
     --success-foreground: 0 0% 100%;
-    --canvas-bg: 40 20% 95%;
-    --canvas-grid: 220 10% 88%;
-    --element-wall: 220 25% 25%;
+    --warning: 39 80% 37%;           /* latão */
+    --danger: 4 61% 44%;             /* #B4342B */
+
+    /* legado usado no mapa/inventário */
+    --bronze: 39 80% 37%;
+    --bronze-light: 38 35% 76%;
+    --cream: 40 14% 95%;
+
+    /* Sidebar navy (shell unificado) */
+    --sidebar-background: 212 100% 15%;
+    --sidebar-foreground: 40 33% 96%;
+    --sidebar-primary: 38 35% 76%;
+    --sidebar-primary-foreground: 212 100% 15%;
+    --sidebar-accent: 214 60% 22%;
+    --sidebar-accent-foreground: 40 33% 96%;
+    --sidebar-border: 38 20% 40%;
+    --sidebar-ring: 38 35% 76%;
+
+    /* Canvas do mapa patrimonial */
+    --canvas-bg: 40 14% 95%;
+    --canvas-grid: 40 8% 86%;
+    --element-wall: 212 60% 22%;
     --element-partition: 220 10% 65%;
     --element-desk-fill: 0 0% 100%;
-    --element-desk-stroke: 220 15% 75%;
-    --element-chair-fill: 220 10% 92%;
-    --element-chair-stroke: 220 10% 70%;
-    --element-selected: 35 45% 55%;
-    --element-hover: 35 40% 70%;
+    --element-desk-stroke: 40 12% 78%;
+    --element-chair-fill: 40 14% 92%;
+    --element-chair-stroke: 40 10% 72%;
+    --element-selected: 39 80% 37%;
+    --element-hover: 38 35% 76%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 214 40% 8%;
+    --foreground: 40 20% 96%;
+    --card: 214 42% 11%;
+    --card-foreground: 40 20% 96%;
+    --popover: 214 42% 11%;
+    --popover-foreground: 40 20% 96%;
+    --primary: 38 35% 76%;
+    --primary-foreground: 212 100% 12%;
+    --secondary: 214 32% 18%;
+    --secondary-foreground: 40 20% 96%;
+    --muted: 214 32% 18%;
+    --muted-foreground: 215 15% 65%;
+    --accent: 214 32% 18%;
+    --accent-foreground: 40 20% 96%;
+    --destructive: 4 61% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 30% 20%;
+    --input: 214 30% 20%;
+    --ring: 38 35% 76%;
+    --sidebar-background: 212 100% 10%;
+    --sidebar-foreground: 40 20% 96%;
+    --sidebar-primary: 38 35% 76%;
+    --sidebar-primary-foreground: 212 100% 12%;
+    --sidebar-accent: 214 40% 16%;
+    --sidebar-accent-foreground: 40 20% 96%;
+    --sidebar-border: 214 30% 24%;
+    --sidebar-ring: 38 35% 76%;
   }
 }
 
@@ -102,6 +126,30 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Títulos com serifada, como na proposta de design */
+  h1, h2, h3, .font-display {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    letter-spacing: -0.005em;
+  }
+}
+
+@layer components {
+  /* Rótulo mono em caixa alta (ex.: "MÓDULO", "ATENDIMENTO") */
+  .label-mono {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--brass-ink));
+  }
+
+  /* Números tabulares (KPIs, códigos) */
+  .num-mono {
+    font-family: 'IBM Plex Mono', monospace;
+    font-variant-numeric: tabular-nums;
   }
 }

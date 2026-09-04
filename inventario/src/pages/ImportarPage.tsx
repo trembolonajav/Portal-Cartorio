@@ -1,12 +1,11 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, FileSpreadsheet, Check, AlertTriangle, Filter, Download } from 'lucide-react';
+import { Upload, FileSpreadsheet, Check, AlertTriangle, Filter, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import SessionActions from '@/components/layout/SessionActions';
+import AppShell from '@/components/layout/AppShell';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { AssetStatus } from '@/features/inventory-map/types/inventoryMap.types';
 import { toast } from 'sonner';
@@ -106,7 +105,6 @@ const parseJSON = (text: string): ImportRow[] => {
 };
 
 const ImportarPage = () => {
-  const navigate = useNavigate();
   const { importAssets, assets } = useInventoryStore();
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -192,18 +190,12 @@ const ImportarPage = () => {
   }, [rows]);
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-14 bg-primary border-b-[3px] border-bronze flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="text-primary-foreground/70 hover:text-primary-foreground p-1 h-auto" onClick={() => navigate('/')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <Upload className="h-5 w-5 text-bronze" />
-          <h1 className="text-primary-foreground font-semibold text-sm tracking-wide">Importar Patrimônios</h1>
+    <AppShell active="importar">
+      <div className="flex h-full flex-col gap-5 px-4 py-6 md:px-7">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-serif text-[34px] font-semibold leading-none text-primary">Importar planilha</h2>
+          <p className="text-sm text-muted-foreground">Carregue itens do GLPI (CSV/JSON) — serão marcados como legado</p>
         </div>
-        <SessionActions />
-      </header>
-
       {rows.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-6">
           <div className="text-center space-y-2">
@@ -326,7 +318,8 @@ const ImportarPage = () => {
           </div>
         </>
       )}
-    </div>
+      </div>
+    </AppShell>
   );
 };
 

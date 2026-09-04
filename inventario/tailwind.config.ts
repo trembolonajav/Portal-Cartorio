@@ -13,6 +13,12 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Instrument Sans", "system-ui", "sans-serif"],
+        serif: ["Cormorant Garamond", "Georgia", "serif"],
+        display: ["Cormorant Garamond", "Georgia", "serif"],
+        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -59,8 +65,28 @@ export default {
         },
         bronze: "hsl(var(--bronze))",
         "bronze-light": "hsl(var(--bronze-light))",
-        navy: "hsl(var(--navy))",
+        navy: {
+          DEFAULT: "hsl(var(--navy))",
+          light: "hsl(var(--navy-light))",
+        },
         "navy-light": "hsl(var(--navy-light))",
+        champagne: "hsl(var(--champagne))",
+        brass: {
+          DEFAULT: "hsl(var(--brass))",
+          ink: "hsl(var(--brass-ink))",
+        },
+        paper: {
+          DEFAULT: "hsl(var(--paper))",
+          2: "hsl(var(--paper-2))",
+        },
+        canvas: "hsl(var(--canvas))",
+        ink: {
+          DEFAULT: "hsl(var(--ink))",
+          2: "hsl(var(--ink-2))",
+        },
+        info: "hsl(var(--info))",
+        warning: "hsl(var(--warning))",
+        danger: "hsl(var(--danger))",
         cream: "hsl(var(--cream))",
         success: {
           DEFAULT: "hsl(var(--success))",

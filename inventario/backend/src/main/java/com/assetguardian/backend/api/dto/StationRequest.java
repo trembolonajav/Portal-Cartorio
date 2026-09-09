@@ -22,6 +22,9 @@ public record StationRequest(
     String observation,
     Long spaceId,
     @Size(max = 80)
-    String layoutElementRef
+    String layoutElementRef,
+    Integer positionX,
+    Integer positionY,
+    Integer positionRotation
 ) {
 }

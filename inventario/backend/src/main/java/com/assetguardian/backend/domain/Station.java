@@ -44,6 +44,15 @@ public class Station extends BaseEntity {
     @Column(name = "layout_element_ref", length = 80)
     private String layoutElementRef;
 
+    @Column(name = "position_x")
+    private Integer positionX;
+
+    @Column(name = "position_y")
+    private Integer positionY;
+
+    @Column(name = "position_rotation")
+    private Integer positionRotation;
+
     @Column(name = "last_inventory_check_at")
     private LocalDateTime lastInventoryCheckAt;
 }

@@ -142,6 +142,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         layoutElementId: item.layoutElementRef || undefined,
         spaceId: toId(item.spaceId),
         responsibleEmployeeId: toId(item.responsibleEmployeeId),
+        positionX: item.positionX ?? undefined,
+        positionY: item.positionY ?? undefined,
+        positionRotation: item.positionRotation ?? undefined,
       }));
 
       const assets = assetsRaw.map(item => ({
@@ -158,6 +161,13 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         origin: item.assetOrigin,
         stationId: toId(item.stationId),
         assignedAt: item.assignedAt || undefined,
+        acquisitionDate: item.acquisitionDate || undefined,
+        fiscalNote: item.fiscalNote || undefined,
+        accountingCategory: item.accountingCategory || undefined,
+        acquisitionValue: item.acquisitionValue ?? undefined,
+        depreciationRate: item.depreciationRate ?? undefined,
+        usefulLifeYears: item.usefulLifeYears ?? undefined,
+        warrantyUntil: item.warrantyUntil || undefined,
       })) as (Asset & { stationId?: string; assignedAt?: string })[];
 
       const spaces: Space[] = spacesRaw.map(item => ({
@@ -300,6 +310,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       status: updates.status ?? current.status,
       observation: updates.observation ?? current.observation,
       layoutElementRef: updates.layoutElementId ?? current.layoutElementId,
+      positionX: updates.positionX ?? current.positionX,
+      positionY: updates.positionY ?? current.positionY,
+      positionRotation: updates.positionRotation ?? current.positionRotation,
       spaceId: updates.spaceId === undefined
         ? (current.spaceId ? Number(current.spaceId) : null)
         : (updates.spaceId ? Number(updates.spaceId) : null),

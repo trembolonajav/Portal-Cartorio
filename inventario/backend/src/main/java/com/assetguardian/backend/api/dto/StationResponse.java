@@ -20,6 +20,9 @@ public record StationResponse(
     String responsibleEmployeeName,
     UUID responsibleDepartmentId,
     String responsibleDepartmentName,
+    Integer positionX,
+    Integer positionY,
+    Integer positionRotation,
     long assetCount
 ) {
 }

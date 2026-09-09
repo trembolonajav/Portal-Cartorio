@@ -36,6 +36,9 @@ export interface ApiStation {
   spaceId: number | null;
   spaceName: string | null;
   layoutElementRef: string | null;
+  positionX: number | null;
+  positionY: number | null;
+  positionRotation: number | null;
   lastInventoryCheckAt: string | null;
   responsibleEmployeeId: string | null;
   responsibleEmployeeName: string | null;
@@ -65,6 +68,13 @@ export interface ApiAsset {
   departmentId: string | null;
   departmentName: string | null;
   assignedAt: string | null;
+  acquisitionDate?: string | null;
+  fiscalNote?: string | null;
+  accountingCategory?: string | null;
+  acquisitionValue?: number | null;
+  depreciationRate?: number | null;
+  usefulLifeYears?: number | null;
+  warrantyUntil?: string | null;
   lastInventoryCheckAt: string | null;
   assetUpdatedAt: string | null;
 }
@@ -169,6 +179,110 @@ export interface ApiAssetDisposal {
   events: ApiAssetDisposalEvent[];
 }
 
+export type ApiResponsibilityTermStatus = "DRAFT" | "WAITING_SIGNATURE" | "ACTIVE" | "RETURNED" | "CANCELLED";
+
+export interface ApiResponsibilityTermItem {
+  id: number;
+  assetId: number;
+  assetCode: string;
+  description: string;
+  category: string;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  station: string | null;
+  status: string;
+}
+
+export interface ApiResponsibilityTermDocument {
+  id: number;
+  type: string;
+  fileName: string;
+  mimeType: string | null;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface ApiResponsibilityTerm {
+  id: number;
+  number: string;
+  status: ApiResponsibilityTermStatus;
+  employeeId: string | null;
+  employeeName: string;
+  department: string | null;
+  location: string | null;
+  notes: string | null;
+  termGeneratedAt: string | null;
+  signedDocumentUploadedAt: string | null;
+  activeSince: string | null;
+  returnedAt: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+  itemCount: number;
+  items: ApiResponsibilityTermItem[];
+  documents: ApiResponsibilityTermDocument[];
+}
+
+export type ApiExchangeTermStatus = "DRAFT" | "WAITING_SIGNATURE" | "ACTIVE" | "CANCELLED";
+
+export interface ApiEquipmentExchangeTermDocument {
+  id: number;
+  type: string;
+  fileName: string;
+  mimeType: string | null;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface ApiEquipmentExchangeTerm {
+  id: number;
+  number: string;
+  status: ApiExchangeTermStatus;
+  retiredAssetId: number;
+  retiredCode: string;
+  retiredDescription: string;
+  retiredSerial: string | null;
+  retiredStation: string | null;
+  retiredResponsible: string | null;
+  deliveredAssetId: number;
+  deliveredCode: string;
+  deliveredDescription: string;
+  deliveredSerial: string | null;
+  deliveredStation: string | null;
+  responsibleName: string | null;
+  location: string | null;
+  ticketRef: string | null;
+  sector: string | null;
+  reason: string | null;
+  notes: string | null;
+  termGeneratedAt: string | null;
+  signedDocumentUploadedAt: string | null;
+  activeSince: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+  documents: ApiEquipmentExchangeTermDocument[];
+}
+
+export type ApiAssetRequestType = "NEW_EQUIPMENT" | "REPAIR" | "RELOCATION" | "SUPPLY" | "OTHER";
+export type ApiAssetRequestPriority = "LOW" | "MEDIUM" | "HIGH";
+export type ApiAssetRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+
+export interface ApiAssetRequest {
+  id: number;
+  number: string;
+  type: ApiAssetRequestType;
+  priority: ApiAssetRequestPriority;
+  status: ApiAssetRequestStatus;
+  title: string;
+  description: string;
+  requestedBy: string | null;
+  department: string | null;
+  decisionNote: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
 export const inventoryApi = {
   me: () => apiGet<ApiAuthMe>("/auth/me"),
   listDepartments: () => apiGet<ApiDepartment[]>("/departments"),
@@ -187,8 +301,8 @@ export const inventoryApi = {
   deleteEmployee: (id: string) => apiDelete(`/employees/${id}`),
 
   listStations: () => apiGet<ApiStation[]>("/stations"),
-  createStation: (body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string }) => apiPost<ApiStation>("/stations", body),
-  updateStation: (id: string, body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string }) => apiPut<ApiStation>(`/stations/${id}`, body),
+  createStation: (body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string; positionX?: number | null; positionY?: number | null; positionRotation?: number | null }) => apiPost<ApiStation>("/stations", body),
+  updateStation: (id: string, body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string; positionX?: number | null; positionY?: number | null; positionRotation?: number | null }) => apiPut<ApiStation>(`/stations/${id}`, body),
   deleteStation: (id: string) => apiDelete(`/stations/${id}`),
   changeResponsible: (id: string, body: { employeeId?: string | null; forceMove?: boolean; notes?: string }) => apiPut<ApiStation>(`/stations/${id}/responsible`, body),
   stationHistory: (id: string) => apiGet<ApiHistoryEvent[]>(`/stations/${id}/history`),
@@ -216,6 +330,41 @@ export const inventoryApi = {
   },
   finalizeDisposal: (id: string, username?: string) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/finalize${username ? `?username=${encodeURIComponent(username)}` : ""}`),
   cancelDisposal: (id: string, body: { reason: string; username?: string }) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/cancel`, body),
+
+  // Termos de responsabilidade
+  listResponsibilityTerms: () => apiGet<ApiResponsibilityTerm[]>("/responsibility-terms"),
+  getResponsibilityTerm: (id: string) => apiGet<ApiResponsibilityTerm>(`/responsibility-terms/${id}`),
+  createResponsibilityTerm: (body: { employeeId: string; assetIds: number[]; notes?: string }) => apiPost<ApiResponsibilityTerm>("/responsibility-terms", body),
+  generateResponsibilityTerm: (id: string, username?: string) => apiPost<ApiResponsibilityTerm>(`/responsibility-terms/${id}/generate-term${username ? `?username=${encodeURIComponent(username)}` : ""}`),
+  responsibilityTermUrl: (id: string) => apiUrl(`/responsibility-terms/${id}/term`),
+  uploadSignedResponsibilityTerm: (id: string, file: File, username?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (username) form.append("username", username);
+    return apiPostForm<ApiResponsibilityTerm>(`/responsibility-terms/${id}/upload-signed-term`, form);
+  },
+  activateResponsibilityTerm: (id: string, username?: string) => apiPost<ApiResponsibilityTerm>(`/responsibility-terms/${id}/activate${username ? `?username=${encodeURIComponent(username)}` : ""}`),
+  returnResponsibilityTerm: (id: string, username?: string) => apiPost<ApiResponsibilityTerm>(`/responsibility-terms/${id}/return${username ? `?username=${encodeURIComponent(username)}` : ""}`),
+
+  // Termos de troca de equipamento
+  listExchangeTerms: () => apiGet<ApiEquipmentExchangeTerm[]>("/equipment-exchange-terms"),
+  getExchangeTerm: (id: string) => apiGet<ApiEquipmentExchangeTerm>(`/equipment-exchange-terms/${id}`),
+  createExchangeTerm: (body: { retiredAssetId: number; deliveredAssetId: number; responsibleName?: string; ticketRef?: string; sector?: string; reason?: string; notes?: string }) => apiPost<ApiEquipmentExchangeTerm>("/equipment-exchange-terms", body),
+  generateExchangeTerm: (id: string, username?: string) => apiPost<ApiEquipmentExchangeTerm>(`/equipment-exchange-terms/${id}/generate-term${username ? `?username=${encodeURIComponent(username)}` : ""}`),
+  exchangeTermUrl: (id: string) => apiUrl(`/equipment-exchange-terms/${id}/term`),
+  uploadSignedExchangeTerm: (id: string, file: File, username?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (username) form.append("username", username);
+    return apiPostForm<ApiEquipmentExchangeTerm>(`/equipment-exchange-terms/${id}/upload-signed-term`, form);
+  },
+  activateExchangeTerm: (id: string, username?: string) => apiPost<ApiEquipmentExchangeTerm>(`/equipment-exchange-terms/${id}/activate${username ? `?username=${encodeURIComponent(username)}` : ""}`),
+
+  // Solicitações
+  listAssetRequests: () => apiGet<ApiAssetRequest[]>("/asset-requests"),
+  createAssetRequest: (body: { type: ApiAssetRequestType; priority?: ApiAssetRequestPriority; title: string; description: string; requestedBy?: string; department?: string }) => apiPost<ApiAssetRequest>("/asset-requests", body),
+  approveAssetRequest: (id: string, body?: { note?: string; username?: string }) => apiPost<ApiAssetRequest>(`/asset-requests/${id}/approve`, body ?? {}),
+  rejectAssetRequest: (id: string, body?: { note?: string; username?: string }) => apiPost<ApiAssetRequest>(`/asset-requests/${id}/reject`, body ?? {}),
 
   getLayout: (spaceId: string) => apiGet<ApiLayout | null>(`/layouts/${spaceId}`),
   saveLayout: (spaceId: string, body: ApiLayout) => apiPut<ApiLayout>(`/layouts/${spaceId}`, body),

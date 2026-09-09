@@ -18,7 +18,7 @@ const spaceTypeLabels: Record<SpaceType, string> = {
   UNIT: 'Unidade',
   BUILDING: 'Prédio',
   FLOOR: 'Andar',
-  SECTOR: 'Setor/Sala',
+  SECTOR: 'Departamento',
 };
 
 const spaceTypeIcons: Record<SpaceType, React.ReactNode> = {
@@ -28,8 +28,10 @@ const spaceTypeIcons: Record<SpaceType, React.ReactNode> = {
   SECTOR: <LayoutGrid className="h-4 w-4" />,
 };
 
+// Modelo: Unidade -> Andar -> Departamento. (Prédio existe no schema mas fica
+// fora do fluxo de criação para não confundir.)
 const allowedChildren: Record<SpaceType, SpaceType[]> = {
-  UNIT: ['BUILDING', 'FLOOR'],
+  UNIT: ['FLOOR'],
   BUILDING: ['FLOOR'],
   FLOOR: ['SECTOR'],
   SECTOR: [],

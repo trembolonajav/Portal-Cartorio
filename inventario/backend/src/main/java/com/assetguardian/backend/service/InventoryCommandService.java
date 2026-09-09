@@ -140,16 +140,10 @@ public class InventoryCommandService {
 
     public void deleteStation(Long id) {
         Station station = requireStation(id);
-        assetAssignmentRepository.findByStationIdAndStatus(id, AssignmentStatus.ACTIVE)
-            .forEach(assignment -> {
-                assignment.setStatus(AssignmentStatus.RETURNED);
-                assignment.setUnassignedAt(LocalDateTime.now());
-            });
-        stationResponsibilityRepository.findByStationIdAndCurrentTrue(id)
-            .ifPresent(resp -> {
-                resp.setCurrent(false);
-                resp.setEndedAt(LocalDateTime.now());
-            });
+        // Remove os vínculos de patrimônio (asset_assignments é ON DELETE RESTRICT).
+        // O histórico permanece em asset_movements (ON DELETE SET NULL) e as
+        // responsabilidades são removidas em cascata (ON DELETE CASCADE).
+        assetAssignmentRepository.deleteAll(assetAssignmentRepository.findByStationId(id));
         stationRepository.delete(station);
     }
 
@@ -379,6 +373,9 @@ public class InventoryCommandService {
         station.setObservation(blankToNull(request.observation()));
         station.setSpace(request.spaceId() == null ? null : requireSpace(request.spaceId()));
         station.setLayoutElementRef(blankToNull(request.layoutElementRef()));
+        station.setPositionX(request.positionX());
+        station.setPositionY(request.positionY());
+        station.setPositionRotation(request.positionRotation());
     }
 
     private void applyAsset(Asset asset, AssetRequest request) {
@@ -393,6 +390,12 @@ public class InventoryCommandService {
         asset.setProcessor(blankToNull(request.processor()));
         asset.setOperatingSystem(blankToNull(request.operatingSystem()));
         asset.setAcquisitionDate(request.acquisitionDate());
+        asset.setFiscalNote(blankToNull(request.fiscalNote()));
+        asset.setAccountingCategory(blankToNull(request.accountingCategory()));
+        asset.setAcquisitionValue(request.acquisitionValue());
+        asset.setDepreciationRate(request.depreciationRate());
+        asset.setUsefulLifeYears(request.usefulLifeYears());
+        asset.setWarrantyUntil(request.warrantyUntil());
         asset.setNotes(blankToNull(request.notes()));
     }
 
@@ -518,6 +521,9 @@ public class InventoryCommandService {
             employee == null ? null : employee.getFullName(),
             department == null ? null : department.getId(),
             department == null ? null : department.getName(),
+            station.getPositionX(),
+            station.getPositionY(),
+            station.getPositionRotation(),
             assetCount
         );
     }
@@ -550,7 +556,14 @@ public class InventoryCommandService {
             department == null ? null : department.getName(),
             current == null ? null : current.getAssignedAt(),
             asset.getLastInventoryCheckAt(),
-            asset.getUpdatedAt()
+            asset.getUpdatedAt(),
+            asset.getAcquisitionDate(),
+            asset.getFiscalNote(),
+            asset.getAccountingCategory(),
+            asset.getAcquisitionValue(),
+            asset.getDepreciationRate(),
+            asset.getUsefulLifeYears(),
+            asset.getWarrantyUntil()
         );
     }
 

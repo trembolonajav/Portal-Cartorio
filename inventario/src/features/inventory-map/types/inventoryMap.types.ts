@@ -34,6 +34,9 @@ export interface Station {
   layoutElementId?: string;
   observation?: string;
   spaceId?: string;
+  positionX?: number;
+  positionY?: number;
+  positionRotation?: number;
 }
 
 export interface Department {
@@ -78,6 +81,13 @@ export interface Asset {
   importedAt?: string;
   stationId?: string;
   assignedAt?: string;
+  acquisitionDate?: string;
+  fiscalNote?: string;
+  accountingCategory?: string;
+  acquisitionValue?: number;
+  depreciationRate?: number;
+  usefulLifeYears?: number;
+  warrantyUntil?: string;
 }
 
 export interface AssetAssignment {

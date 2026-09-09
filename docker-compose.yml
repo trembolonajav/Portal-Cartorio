@@ -24,6 +24,9 @@
       SPRING_DATASOURCE_USERNAME: cart_rio
       SPRING_DATASOURCE_PASSWORD: cart_rio
       SERVER_PORT: 8081
+      # Dados reais importados do backup (08/09/2026). Seed de demo desligado
+      # para um restart não reinjetar mocks nem recriar contas via syncEmployeeAccounts.
+      APP_SEED_DEMO_DATA: "false"
     ports:
       - "8081:8081"
     depends_on:

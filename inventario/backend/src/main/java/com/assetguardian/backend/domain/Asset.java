@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.Getter;
@@ -50,6 +51,24 @@ public class Asset extends BaseEntity {
 
     @Column(name = "acquisition_date")
     private LocalDate acquisitionDate;
+
+    @Column(name = "fiscal_note", length = 120)
+    private String fiscalNote;
+
+    @Column(name = "accounting_category", length = 120)
+    private String accountingCategory;
+
+    @Column(name = "acquisition_value", precision = 14, scale = 2)
+    private BigDecimal acquisitionValue;
+
+    @Column(name = "depreciation_rate", precision = 5, scale = 2)
+    private BigDecimal depreciationRate;
+
+    @Column(name = "useful_life_years")
+    private Integer usefulLifeYears;
+
+    @Column(name = "warranty_until")
+    private LocalDate warrantyUntil;
 
     @Column(length = 2000)
     private String notes;

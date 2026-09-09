@@ -336,7 +336,11 @@ const PatrimoniosPage = () => {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-[14px] text-ink">{asset.description}</TableCell>
+                        <TableCell className="text-[14px] text-ink">
+                          <button type="button" className="text-left hover:text-primary hover:underline" onClick={() => navigate(`/patrimonios/${asset.id}`)}>
+                            {asset.description}
+                          </button>
+                        </TableCell>
                         <TableCell className="text-[13px] text-muted-foreground">{asset.type}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={STATUS_BADGE[asset.status] ?? STATUS_BADGE.INACTIVE}>

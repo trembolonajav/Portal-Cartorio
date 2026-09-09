@@ -5,6 +5,7 @@ import com.assetguardian.backend.domain.AssetStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record AssetRequest(
@@ -31,6 +32,14 @@ public record AssetRequest(
     @Size(max = 120)
     String operatingSystem,
     LocalDate acquisitionDate,
+    @Size(max = 120)
+    String fiscalNote,
+    @Size(max = 120)
+    String accountingCategory,
+    BigDecimal acquisitionValue,
+    BigDecimal depreciationRate,
+    Integer usefulLifeYears,
+    LocalDate warrantyUntil,
     @Size(max = 2000)
     String notes
 ) {

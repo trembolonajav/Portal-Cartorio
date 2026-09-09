@@ -51,7 +51,14 @@ public class InventoryQueryService {
             view.getDepartmentName(),
             view.getAssignedAt(),
             view.getLastInventoryCheckAt(),
-            view.getAssetUpdatedAt()
+            view.getAssetUpdatedAt(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
         );
     }
 }

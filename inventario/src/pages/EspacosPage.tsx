@@ -157,7 +157,7 @@ const EspacosPage = () => {
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  {(space.type === 'FLOOR' || space.type === 'SECTOR') && (
+                  {space.type === 'SECTOR' && (
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver mapa deste espaço" onClick={() => navigate(`/?spaceId=${space.id}`)}>
                       <Map className="h-3.5 w-3.5" />
                     </Button>

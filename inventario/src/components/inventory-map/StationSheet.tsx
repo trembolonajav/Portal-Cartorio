@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { StationStatus } from '@/features/inventory-map/types/inventoryMap.types';
 import { toast } from 'sonner';
+import StationResponsible from './StationResponsible';
 
 const STATUS_LABELS: Record<StationStatus, string> = { ACTIVE: 'Ativa', INACTIVE: 'Inativa', MAINTENANCE: 'Manutenção' };
 const STATUS_BADGE: Record<StationStatus, string> = {
@@ -140,10 +141,10 @@ const StationSheet = ({ stationId, onClose }: { stationId: string; onClose: () =
               </div>
               <div className="flex flex-col gap-2 text-[13px]">
                 <div className="flex justify-between"><span className="text-muted-foreground">Espaço</span><span className="text-ink">{spaces.find((s) => s.id === station.spaceId)?.name ?? '—'}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Responsável</span><span className="text-ink">{employee?.fullName ?? '—'}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Itens</span><span className="text-ink">{assets.length}</span></div>
               </div>
 
+              <StationResponsible key={station.id} stationId={station.id} />
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="label-mono">Patrimônios nesta estação</span>

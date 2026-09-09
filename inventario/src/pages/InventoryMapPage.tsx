@@ -3,11 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { Boxes, Search, Plus, Map as MapIcon, Pencil, Check, X } from 'lucide-react';
 import StationSheet from '@/components/inventory-map/StationSheet';
 import IllustratedMap from '@/components/inventory-map/IllustratedMap';
+import MapSelector, { isSelectableMap, spaceAncestors } from '@/components/inventory-map/MapSelector';
 import AppShell from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import { inventoryApi } from '@/lib/inventory-api';
@@ -15,8 +16,6 @@ import type { SpaceType, StationStatus } from '@/features/inventory-map/types/in
 import { toast } from 'sonner';
 
 const SPACE_TYPE_LABELS: Record<SpaceType, string> = { UNIT: 'Unidade', BUILDING: 'Prédio', FLOOR: 'Andar', SECTOR: 'Departamento' };
-// Só Andar e Departamento têm planta/estações (Unidade agrupa).
-const MAP_TYPES: SpaceType[] = ['FLOOR', 'SECTOR'];
 const emptyStation = { code: '', name: '', status: 'ACTIVE' as StationStatus };
 const defaultPos = (idx: number) => ({ x: 30 + (idx % 4) * 230, y: 60 + Math.floor(idx / 4) * 210 });
 
@@ -34,8 +33,11 @@ const InventoryMapPage = () => {
   // "Ver mapa deste espaço" (tela Espaços) abre já filtrado neste Andar/Departamento.
   useEffect(() => {
     const sid = searchParams.get('spaceId');
-    if (sid) setActiveMap(sid);
-  }, [searchParams]);
+    setActiveMap(current => {
+      const candidate = sid ?? current;
+      return spaces.some(s => s.id === candidate && isSelectableMap(s)) ? candidate : 'all';
+    });
+  }, [searchParams, spaces]);
   const [sheetStationId, setSheetStationId] = useState<string | null>(null);
 
   const [editing, setEditing] = useState(false);
@@ -44,7 +46,7 @@ const InventoryMapPage = () => {
   const [savingLayout, setSavingLayout] = useState(false);
 
   const [mapOpen, setMapOpen] = useState(false);
-  const [mapForm, setMapForm] = useState({ name: '', type: 'FLOOR' as SpaceType });
+  const [mapForm, setMapForm] = useState({ name: '', type: 'SECTOR' as SpaceType, parentId: '' });
   const [stationOpen, setStationOpen] = useState(false);
   const [stationForm, setStationForm] = useState(emptyStation);
   const [stationSpace, setStationSpace] = useState<string>('none');
@@ -54,23 +56,6 @@ const InventoryMapPage = () => {
   const visibleStations = useMemo(
     () => (activeMap === 'all' ? stations : stations.filter((s) => s.spaceId === activeMap)),
     [stations, activeMap],
-  );
-
-  // Seletor agrupado por Unidade (Andares/Departamentos aninhados).
-  const orderedUnits = useMemo(() => {
-    const childrenOf = (id: string) => spaces.filter((s) => s.parentId === id).sort((a, b) => a.order - b.order);
-    const walk = (id: string, depth: number, acc: { id: string; name: string; type: SpaceType; depth: number }[]) => {
-      childrenOf(id).forEach((c) => { acc.push({ id: c.id, name: c.name, type: c.type, depth }); walk(c.id, depth + 1, acc); });
-    };
-    return spaces.filter((s) => s.type === 'UNIT').sort((a, b) => a.order - b.order).map((u) => {
-      const items: { id: string; name: string; type: SpaceType; depth: number }[] = [];
-      walk(u.id, 1, items);
-      return { unit: u, items };
-    });
-  }, [spaces]);
-  const orphanSpaces = useMemo(
-    () => spaces.filter((s) => s.type !== 'UNIT' && (!s.parentId || !spaces.some((p) => p.id === s.parentId))),
-    [spaces],
   );
 
   const enterEdit = () => {
@@ -107,12 +92,13 @@ const InventoryMapPage = () => {
 
   const createMap = async () => {
     if (!mapForm.name.trim()) { toast.error('Dê um nome ao mapa'); return; }
+    if (!mapForm.parentId) { toast.error('Selecione o andar do mapa'); return; }
     setBusy(true);
     try {
-      const created = await inventoryApi.createSpace({ name: mapForm.name.trim(), type: mapForm.type });
+      const created = await inventoryApi.createSpace({ name: mapForm.name.trim(), type: mapForm.type, parentId: mapForm.parentId ? Number(mapForm.parentId) : undefined });
       await refreshAll();
       setActiveMap(String(created.id));
-      setMapOpen(false); setMapForm({ name: '', type: 'FLOOR' });
+      setMapOpen(false); setMapForm({ name: '', type: 'SECTOR', parentId: '' });
       toast.success('Mapa criado');
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao criar mapa'); }
     finally { setBusy(false); }
@@ -151,26 +137,7 @@ const InventoryMapPage = () => {
         <div className="flex flex-wrap items-center gap-2.5 border-b border-border bg-card px-4 py-2.5 md:px-6">
           <MapIcon className="h-4 w-4 text-brass-ink" />
           <span className="text-[13px] font-medium text-muted-foreground">Mapa:</span>
-          <Select value={activeMap} onValueChange={setActiveMap} disabled={editing}>
-            <SelectTrigger className="h-9 w-[240px] text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent className="max-h-[420px]">
-              <SelectItem value="all">Todos os espaços</SelectItem>
-              {orderedUnits.map(({ unit, items }) => (
-                <SelectGroup key={unit.id}>
-                  <SelectLabel className="text-brass-ink">{unit.name}</SelectLabel>
-                  {items.map((it) => (
-                    <SelectItem key={it.id} value={it.id} style={{ paddingLeft: 8 + it.depth * 14 }}>{it.name} · {SPACE_TYPE_LABELS[it.type]}</SelectItem>
-                  ))}
-                </SelectGroup>
-              ))}
-              {orphanSpaces.length > 0 && (
-                <SelectGroup>
-                  <SelectLabel className="text-muted-foreground">Sem unidade</SelectLabel>
-                  {orphanSpaces.map((sp) => <SelectItem key={sp.id} value={sp.id}>{sp.name} · {SPACE_TYPE_LABELS[sp.type]}</SelectItem>)}
-                </SelectGroup>
-              )}
-            </SelectContent>
-          </Select>
+          <MapSelector spaces={spaces} value={activeMap} onChange={setActiveMap} disabled={editing} />
 
           {editing ? (
             <div className="ml-auto flex items-center gap-2">
@@ -181,7 +148,7 @@ const InventoryMapPage = () => {
           ) : (
             <>
               <Button size="sm" variant="outline" className="h-9" onClick={() => setMapOpen(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Novo mapa</Button>
-              <Button size="sm" variant="outline" className="ml-auto h-9" onClick={enterEdit} disabled={visibleStations.length === 0 || activeMap === 'all'} title={activeMap === 'all' ? 'Selecione um Andar/Departamento para editar a planta' : undefined}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar planta</Button>
+              <Button size="sm" variant="outline" className="ml-auto h-9" onClick={enterEdit} disabled={visibleStations.length === 0 || activeMap === 'all'} title={activeMap === 'all' ? 'Selecione um mapa para editar a planta' : undefined}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar planta</Button>
               <Button size="sm" className="h-9" onClick={openNewStation}><Plus className="mr-1.5 h-3.5 w-3.5" />Nova estação</Button>
             </>
           )}
@@ -213,10 +180,10 @@ const InventoryMapPage = () => {
           </DialogHeader>
           <div className="space-y-4 py-1">
             <div className="space-y-1.5"><Label className="text-xs">Nome do mapa *</Label><Input value={mapForm.name} onChange={(e) => setMapForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ex.: Procuração" className="h-9 text-sm" /></div>
-            <div className="space-y-1.5"><Label className="text-xs">Tipo</Label>
-              <Select value={mapForm.type} onValueChange={(v) => setMapForm((f) => ({ ...f, type: v as SpaceType }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>{MAP_TYPES.map((t) => <SelectItem key={t} value={t}>{SPACE_TYPE_LABELS[t]}</SelectItem>)}</SelectContent>
+            <div className="space-y-1.5"><Label className="text-xs">Andar *</Label>
+              <Select value={mapForm.parentId} onValueChange={(parentId) => setMapForm(f => ({ ...f, parentId }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecione o andar" /></SelectTrigger>
+                <SelectContent>{spaces.filter(s => s.type === 'FLOOR').map(s => <SelectItem key={s.id} value={s.id}>{[...spaceAncestors(s, spaces).map(p => p.name), s.name].join(' › ')}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
@@ -248,7 +215,7 @@ const InventoryMapPage = () => {
             <div className="space-y-1.5"><Label className="text-xs">Mapa / espaço</Label>
               <Select value={stationSpace} onValueChange={setStationSpace}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Sem espaço" /></SelectTrigger>
-                <SelectContent><SelectItem value="none">Sem espaço</SelectItem>{spaces.map((sp) => <SelectItem key={sp.id} value={sp.id}>{sp.name} · {SPACE_TYPE_LABELS[sp.type]}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="none">Sem espaço</SelectItem>{spaces.filter(isSelectableMap).map((sp) => <SelectItem key={sp.id} value={sp.id}>{sp.name} · {SPACE_TYPE_LABELS[sp.type]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>

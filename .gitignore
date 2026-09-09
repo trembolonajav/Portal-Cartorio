@@ -16,6 +16,8 @@ dist-ssr
 *.local
 backup.sql
 *.dump
+# Dumps de segurança locais do banco (não versionar)
+*-backup-*.sql
 
 # Java
 backend/target/

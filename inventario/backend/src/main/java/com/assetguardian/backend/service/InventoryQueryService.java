@@ -58,6 +58,9 @@ public class InventoryQueryService {
             null,
             null,
             null,
+            null,
+            null,
+            null,
             null
         );
     }

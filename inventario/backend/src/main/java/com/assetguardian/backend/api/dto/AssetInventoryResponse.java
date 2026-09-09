@@ -2,6 +2,7 @@ package com.assetguardian.backend.api.dto;
 
 import com.assetguardian.backend.domain.AssetOrigin;
 import com.assetguardian.backend.domain.AssetStatus;
+import com.assetguardian.backend.domain.CheckResult;
 import com.assetguardian.backend.domain.StationStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -37,6 +38,9 @@ public record AssetInventoryResponse(
     BigDecimal acquisitionValue,
     BigDecimal depreciationRate,
     Integer usefulLifeYears,
-    LocalDate warrantyUntil
+    LocalDate warrantyUntil,
+    LocalDateTime lastCheckAt,
+    String lastCheckBy,
+    CheckResult lastCheckResult
 ) {
 }

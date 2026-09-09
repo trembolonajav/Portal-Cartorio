@@ -55,4 +55,11 @@ public class Station extends BaseEntity {
 
     @Column(name = "last_inventory_check_at")
     private LocalDateTime lastInventoryCheckAt;
+
+    // Selo da última conferência física (módulo mobile)
+    @Column(name = "last_conference_at")
+    private LocalDateTime lastConferenceAt;
+
+    @Column(name = "last_conference_by", length = 160)
+    private String lastConferenceBy;
 }

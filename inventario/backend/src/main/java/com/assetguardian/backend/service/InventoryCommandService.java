@@ -524,6 +524,8 @@ public class InventoryCommandService {
             station.getPositionX(),
             station.getPositionY(),
             station.getPositionRotation(),
+            station.getLastConferenceAt(),
+            station.getLastConferenceBy(),
             assetCount
         );
     }
@@ -563,7 +565,10 @@ public class InventoryCommandService {
             asset.getAcquisitionValue(),
             asset.getDepreciationRate(),
             asset.getUsefulLifeYears(),
-            asset.getWarrantyUntil()
+            asset.getWarrantyUntil(),
+            asset.getLastCheckAt(),
+            asset.getLastCheckBy(),
+            asset.getLastCheckResult()
         );
     }
 

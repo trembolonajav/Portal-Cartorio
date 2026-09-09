@@ -75,4 +75,15 @@ public class Asset extends BaseEntity {
 
     @Column(name = "last_inventory_check_at")
     private LocalDateTime lastInventoryCheckAt;
+
+    // Última conferência física (módulo mobile)
+    @Column(name = "last_check_at")
+    private LocalDateTime lastCheckAt;
+
+    @Column(name = "last_check_by", length = 160)
+    private String lastCheckBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_check_result", length = 30)
+    private CheckResult lastCheckResult;
 }

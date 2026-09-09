@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Search, Check, AlertTriangle, X, Plus, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Search, Check, AlertTriangle, X, Plus, Loader2, CheckCircle2, PackageSearch } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,9 @@ const ConferenciaEstacaoPage = () => {
   const finalizeConference = useInventoryStore((s) => s.finalizeConference);
   const addAsset = useInventoryStore((s) => s.addAsset);
   const linkAsset = useInventoryStore((s) => s.linkAsset);
+  const transferAsset = useInventoryStore((s) => s.transferAsset);
+  const allAssets = useInventoryStore((s) => s.assets);
+  const getStationForAsset = useInventoryStore((s) => s.getStationForAsset);
 
   const station = useMemo(() => stations.find((s) => s.id === stationId), [stations, stationId]);
   const assets = station ? getAssetsForStation(station.id) : [];
@@ -52,7 +55,10 @@ const ConferenciaEstacaoPage = () => {
   const [divAsset, setDivAsset] = useState<Asset | null>(null);
   const [divType, setDivType] = useState<DivergenceType>("WRONG_LOCATION");
   const [divNote, setDivNote] = useState("");
-  const [divMove, setDivMove] = useState(false);
+
+  const [trazerOpen, setTrazerOpen] = useState(false);
+  const [trazerQ, setTrazerQ] = useState("");
+  const [trazerBusy, setTrazerBusy] = useState<string | null>(null);
 
   const [novoOpen, setNovoOpen] = useState(false);
   const emptyNovo = { assetCode: "", type: "", manufacturer: "", model: "", serialNumber: "", status: "ACTIVE" as AssetStatus, notes: "" };
@@ -89,11 +95,11 @@ const ConferenciaEstacaoPage = () => {
     try {
       const res = await recordCheck(divAsset.id, {
         result: "DIVERGENCE", divergenceType: divType, stationId: station.id,
-        registerMovement: divMove, note: divNote.trim() || undefined,
+        note: divNote.trim() || undefined,
       });
       if (res.ok) toast.success(`Divergência registrada para ${divAsset.assetCode}`);
       else toast.error(res.error || "Falha ao registrar divergência");
-      setDivAsset(null); setDivNote(""); setDivMove(false); setDivType("WRONG_LOCATION");
+      setDivAsset(null); setDivNote(""); setDivType("WRONG_LOCATION");
     } finally { setBusyId(null); }
   };
 
@@ -116,6 +122,40 @@ const ConferenciaEstacaoPage = () => {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao cadastrar patrimônio");
     } finally { setSavingNovo(false); }
+  };
+
+  const trazerQuery = trazerQ.trim().toLowerCase();
+  const trazerResults = trazerQuery
+    ? allAssets
+        .filter((a) => a.assetCode.toLowerCase().includes(trazerQuery) || a.description.toLowerCase().includes(trazerQuery))
+        .filter((a) => getStationForAsset(a.id)?.id !== station.id && a.status !== "DISPOSED")
+        .slice(0, 40)
+    : [];
+
+  // Trazer um patrimônio de outro local (ou sem local) para esta estação, registrando a movimentação.
+  const bring = async (asset: Asset) => {
+    setTrazerBusy(asset.id);
+    try {
+      const cur = getStationForAsset(asset.id);
+      const moved = cur ? await transferAsset(asset.id, station.id) : await linkAsset(asset.id, station.id);
+      if (moved && moved.ok === false) { toast.error(moved.error || "Falha ao trazer"); return; }
+      await recordCheck(asset.id, { result: "FOUND", stationId: station.id, note: cur ? `Trazido de ${cur.code} por conferência` : "Vinculado na conferência" });
+      toast.success(cur ? `${asset.assetCode} trazido de ${cur.code}` : `${asset.assetCode} vinculado`);
+    } finally { setTrazerBusy(null); }
+  };
+
+  // Apenas registrar que foi encontrado aqui mas pertence a outro local (sem mover).
+  const noteElsewhere = async (asset: Asset) => {
+    setTrazerBusy(asset.id);
+    try {
+      const cur = getStationForAsset(asset.id);
+      const res = await recordCheck(asset.id, {
+        result: "DIVERGENCE", divergenceType: "WRONG_LOCATION", stationId: station.id,
+        note: cur ? `Encontrado em ${station.code}, cadastrado em ${cur.code}` : `Encontrado em ${station.code}, sem local no cadastro`,
+      });
+      if (res.ok) toast.success(`Divergência registrada para ${asset.assetCode}`);
+      else toast.error(res.error || "Falha ao registrar");
+    } finally { setTrazerBusy(null); }
   };
 
   const finalize = async () => {
@@ -169,7 +209,7 @@ const ConferenciaEstacaoPage = () => {
                 className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${a.lastCheckResult === "FOUND" ? "border-success bg-success/10 text-success" : "border-border text-ink active:bg-paper-2"}`}>
                 <Check className="h-3.5 w-3.5" />Encontrado
               </button>
-              <button disabled={busyId === a.id} onClick={() => { setDivAsset(a); setDivType("WRONG_LOCATION"); setDivNote(""); setDivMove(false); }}
+              <button disabled={busyId === a.id} onClick={() => { setDivAsset(a); setDivType("WRONG_LOCATION"); setDivNote(""); }}
                 className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${a.lastCheckResult === "DIVERGENCE" ? "border-brass bg-brass/10 text-brass" : "border-border text-ink active:bg-paper-2"}`}>
                 <AlertTriangle className="h-3.5 w-3.5" />Divergência
               </button>
@@ -181,8 +221,12 @@ const ConferenciaEstacaoPage = () => {
           </div>
         ))}
 
+        <button onClick={() => { setTrazerOpen(true); setTrazerQ(""); }}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-primary active:bg-paper-2">
+          <PackageSearch className="h-4 w-4" />Trazer patrimônio de outro local
+        </button>
         <button onClick={() => setNovoOpen(true)}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brass/40 py-3 text-sm font-medium text-brass-ink active:bg-brass/[0.05]">
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brass/40 py-3 text-sm font-medium text-brass-ink active:bg-brass/[0.05]">
           <Plus className="h-4 w-4" />Novo patrimônio
         </button>
       </main>
@@ -209,12 +253,7 @@ const ConferenciaEstacaoPage = () => {
               <Label className="text-xs">Observação</Label>
               <Textarea value={divNote} onChange={(e) => setDivNote(e.target.value)} rows={2} placeholder="Detalhe a divergência (opcional)" />
             </div>
-            {divType === "WRONG_LOCATION" && (
-              <label className="flex items-center gap-2 rounded-lg border border-border bg-paper-2 px-3 py-2 text-[13px]">
-                <input type="checkbox" checked={divMove} onChange={(e) => setDivMove(e.target.checked)} className="h-4 w-4 accent-primary" />
-                Registrar movimentação para <strong>{station.code}</strong>
-              </label>
-            )}
+            <p className="text-[11px] text-muted-foreground">A divergência fica registrada sem mover o patrimônio. Para trazer um item que está em outro local para cá, use <strong>Trazer patrimônio</strong>.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDivAsset(null)}>Cancelar</Button>
@@ -251,6 +290,43 @@ const ConferenciaEstacaoPage = () => {
             <Button variant="outline" size="sm" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button size="sm" onClick={createNovo} disabled={savingNovo}>{savingNovo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar e vincular"}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Trazer patrimônio de outro local */}
+      <Dialog open={trazerOpen} onOpenChange={setTrazerOpen}>
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-sm">
+          <DialogHeader><DialogTitle>Trazer para {station.code}</DialogTitle></DialogHeader>
+          <div className="relative flex h-10 items-center">
+            <Search className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground/70" />
+            <Input autoFocus inputMode="search" value={trazerQ} onChange={(e) => setTrazerQ(e.target.value)}
+              placeholder="Código ou descrição do patrimônio" className="h-10 pl-9 text-sm" />
+          </div>
+          <div className="-mx-1 mt-2 flex-1 overflow-auto px-1">
+            {!trazerQuery && <p className="py-6 text-center text-[12px] italic text-muted-foreground">Digite o número do patrimônio que você encontrou aqui.</p>}
+            {trazerQuery && trazerResults.length === 0 && <p className="py-6 text-center text-[12px] italic text-muted-foreground">Nada encontrado. Se não existe no sistema, use “+ Novo patrimônio”.</p>}
+            {trazerResults.map((a) => {
+              const cur = getStationForAsset(a.id);
+              return (
+                <div key={a.id} className="border-b border-border/60 py-2.5 last:border-0">
+                  <div className="num-mono text-[13px] font-semibold text-primary">{a.assetCode}</div>
+                  <div className="text-[12px] text-muted-foreground">{a.description}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">{cur ? `Cadastrado em ${cur.code}` : "Sem local no cadastro"}</div>
+                  <div className="mt-1.5 flex gap-2">
+                    <Button size="sm" className="h-8 flex-1 text-[12px]" disabled={trazerBusy === a.id} onClick={() => bring(a)}>
+                      {cur ? "Trazer para cá" : "Vincular aqui"}
+                    </Button>
+                    {cur && (
+                      <Button size="sm" variant="outline" className="h-8 text-[12px]" disabled={trazerBusy === a.id} onClick={() => noteElsewhere(a)}>
+                        Só divergência
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="pt-1 text-[11px] text-muted-foreground">“Trazer para cá” registra a movimentação (de onde veio e por quem) no histórico do patrimônio.</p>
         </DialogContent>
       </Dialog>
     </div>

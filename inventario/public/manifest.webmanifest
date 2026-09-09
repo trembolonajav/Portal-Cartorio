@@ -1,0 +1,16 @@
+{
+  "name": "Inventário Índio Artiaga",
+  "short_name": "Inventário",
+  "description": "Conferência de patrimônio do 4º Tabelionato de Notas Índio Artiaga",
+  "start_url": "/conferencia",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#00234B",
+  "theme_color": "#00234B",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/favicon.png", "sizes": "192x192 512x512", "type": "image/png" }
+  ]
+}

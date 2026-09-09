@@ -15,7 +15,7 @@ interface AuthState {
   user: AuthUser | null;
   error: string | null;
   restoreSession: () => Promise<void>;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => void;
 }
 
@@ -52,9 +52,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  login: async (username, password) => {
+  login: async (username, password, remember = false) => {
     set({ status: "loading", error: null });
-    setStoredAuth({ username, token: buildBasicToken(username, password) });
+    setStoredAuth({ username, token: buildBasicToken(username, password) }, remember);
 
     try {
       const me = await inventoryApi.me();

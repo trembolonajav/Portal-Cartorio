@@ -37,7 +37,14 @@ export interface Station {
   positionX?: number;
   positionY?: number;
   positionRotation?: number;
+  lastConferenceAt?: string;
+  lastConferenceBy?: string;
 }
+
+export type CheckResult = 'FOUND' | 'NOT_FOUND' | 'DIVERGENCE';
+export type DivergenceType =
+  | 'WRONG_LOCATION' | 'WRONG_OWNER' | 'WRONG_DESCRIPTION' | 'NO_TAG'
+  | 'DAMAGED' | 'DISPOSED_FOUND' | 'NEW_UNREGISTERED';
 
 export interface Department {
   id: string;
@@ -88,6 +95,9 @@ export interface Asset {
   depreciationRate?: number;
   usefulLifeYears?: number;
   warrantyUntil?: string;
+  lastCheckAt?: string;
+  lastCheckBy?: string;
+  lastCheckResult?: CheckResult;
 }
 
 export interface AssetAssignment {

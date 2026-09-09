@@ -16,6 +16,9 @@ import FuncionariosPage from "./pages/FuncionariosPage";
 import ArquivoPage from "./pages/ArquivoPage";
 import FichaPatrimonioPage from "./pages/FichaPatrimonioPage";
 import CatalogoPage from "./pages/CatalogoPage";
+import LoginPage from "./pages/LoginPage";
+import ConferenciaPage from "./pages/ConferenciaPage";
+import ConferenciaEstacaoPage from "./pages/ConferenciaEstacaoPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -25,14 +28,6 @@ const LoadingScreen = () => (
     Carregando sistema...
   </div>
 );
-
-const RedirectToPortalLogin = () => {
-  useEffect(() => {
-    window.location.href = `${window.location.protocol}//${window.location.hostname}:8080`;
-  }, []);
-
-  return <LoadingScreen />;
-};
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const status = useAuthStore((state) => state.status);
@@ -45,6 +40,24 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
 
+  return <>{children}</>;
+};
+
+// Páginas administrativas/desktop: exigem ADMIN ou OPERATOR.
+// O estagiário (USER) é enviado direto para a Conferência (mobile).
+const InventoryRoute = ({ children }: { children: React.ReactNode }) => {
+  const status = useAuthStore((state) => state.status);
+  const role = useAuthStore((state) => state.user?.role);
+
+  if (status === "loading") {
+    return <LoadingScreen />;
+  }
+  if (status !== "authenticated") {
+    return <Navigate to="/login" replace />;
+  }
+  if (role === "USER") {
+    return <Navigate to="/conferencia" replace />;
+  }
   return <>{children}</>;
 };
 
@@ -105,17 +118,19 @@ const App = () => (
       <AppInit>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<RedirectToPortalLogin />} />
-            <Route path="/" element={<ProtectedRoute><InventoryMapPage /></ProtectedRoute>} />
-            <Route path="/patrimonios" element={<ProtectedRoute><PatrimoniosPage /></ProtectedRoute>} />
-            <Route path="/patrimonios/:id" element={<ProtectedRoute><FichaPatrimonioPage /></ProtectedRoute>} />
-            <Route path="/baixas-patrimoniais" element={<ProtectedRoute><BaixasPatrimoniaisPage /></ProtectedRoute>} />
-            <Route path="/departamentos" element={<ProtectedRoute><DepartamentosPage /></ProtectedRoute>} />
-            <Route path="/funcionarios" element={<ProtectedRoute><FuncionariosPage /></ProtectedRoute>} />
-            <Route path="/espacos" element={<ProtectedRoute><EspacosPage /></ProtectedRoute>} />
-            <Route path="/catalogo" element={<ProtectedRoute><CatalogoPage /></ProtectedRoute>} />
-            <Route path="/arquivo" element={<ProtectedRoute><AdminRoute><ArquivoPage /></AdminRoute></ProtectedRoute>} />
-            <Route path="/importar" element={<ProtectedRoute><AdminRoute><ImportarPage /></AdminRoute></ProtectedRoute>} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/conferencia" element={<ProtectedRoute><ConferenciaPage /></ProtectedRoute>} />
+            <Route path="/conferencia/estacao/:stationId" element={<ProtectedRoute><ConferenciaEstacaoPage /></ProtectedRoute>} />
+            <Route path="/" element={<InventoryRoute><InventoryMapPage /></InventoryRoute>} />
+            <Route path="/patrimonios" element={<InventoryRoute><PatrimoniosPage /></InventoryRoute>} />
+            <Route path="/patrimonios/:id" element={<InventoryRoute><FichaPatrimonioPage /></InventoryRoute>} />
+            <Route path="/baixas-patrimoniais" element={<InventoryRoute><BaixasPatrimoniaisPage /></InventoryRoute>} />
+            <Route path="/departamentos" element={<InventoryRoute><DepartamentosPage /></InventoryRoute>} />
+            <Route path="/funcionarios" element={<InventoryRoute><FuncionariosPage /></InventoryRoute>} />
+            <Route path="/espacos" element={<InventoryRoute><EspacosPage /></InventoryRoute>} />
+            <Route path="/catalogo" element={<InventoryRoute><CatalogoPage /></InventoryRoute>} />
+            <Route path="/arquivo" element={<InventoryRoute><AdminRoute><ArquivoPage /></AdminRoute></InventoryRoute>} />
+            <Route path="/importar" element={<InventoryRoute><AdminRoute><ImportarPage /></AdminRoute></InventoryRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

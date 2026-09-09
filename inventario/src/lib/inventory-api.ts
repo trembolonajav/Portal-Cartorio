@@ -39,6 +39,8 @@ export interface ApiStation {
   positionX: number | null;
   positionY: number | null;
   positionRotation: number | null;
+  lastConferenceAt: string | null;
+  lastConferenceBy: string | null;
   lastInventoryCheckAt: string | null;
   responsibleEmployeeId: string | null;
   responsibleEmployeeName: string | null;
@@ -77,6 +79,30 @@ export interface ApiAsset {
   warrantyUntil?: string | null;
   lastInventoryCheckAt: string | null;
   assetUpdatedAt: string | null;
+  lastCheckAt?: string | null;
+  lastCheckBy?: string | null;
+  lastCheckResult?: CheckResult | null;
+}
+
+export type CheckResult = "FOUND" | "NOT_FOUND" | "DIVERGENCE";
+export type DivergenceType =
+  | "WRONG_LOCATION" | "WRONG_OWNER" | "WRONG_DESCRIPTION" | "NO_TAG"
+  | "DAMAGED" | "DISPOSED_FOUND" | "NEW_UNREGISTERED";
+
+export interface ApiPhysicalCheck {
+  id: number;
+  assetId: number;
+  assetCode: string;
+  assetDescription: string;
+  stationId: number | null;
+  stationCode: string | null;
+  expectedStationId: number | null;
+  expectedStationCode: string | null;
+  result: CheckResult;
+  divergenceType: DivergenceType | null;
+  note: string | null;
+  checkedBy: string;
+  checkedAt: string;
 }
 
 export interface ApiHistoryEvent {
@@ -306,6 +332,11 @@ export const inventoryApi = {
   deleteStation: (id: string) => apiDelete(`/stations/${id}`),
   changeResponsible: (id: string, body: { employeeId?: string | null; forceMove?: boolean; notes?: string }) => apiPut<ApiStation>(`/stations/${id}/responsible`, body),
   stationHistory: (id: string) => apiGet<ApiHistoryEvent[]>(`/stations/${id}/history`),
+
+  // Conferência física (mobile)
+  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: number | null; registerMovement?: boolean; note?: string }) => apiPost<ApiPhysicalCheck>(`/assets/${assetId}/check`, body),
+  checkHistory: (assetId: string) => apiGet<ApiPhysicalCheck[]>(`/assets/${assetId}/checks`),
+  finalizeConference: (stationId: string) => apiPost<void>(`/stations/${stationId}/finalize-conference`),
 
   listAssets: () => apiGet<ApiAsset[]>("/assets-flat"),
   createAsset: (body: { assetCode: string; type: string; description: string; serialNumber?: string; status: AssetStatus; origin?: "MANUAL" | "LEGACY_GLPI"; manufacturer?: string; model?: string; processor?: string; operatingSystem?: string; notes?: string }) => apiPost<ApiAsset>("/assets", body),

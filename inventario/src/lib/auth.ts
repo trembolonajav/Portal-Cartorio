@@ -45,8 +45,15 @@ export const getStoredAuth = (): StoredAuthCredentials | null => {
   }
 };
 
-export const setStoredAuth = (value: StoredAuthCredentials) => {
-  if (typeof window !== "undefined") {
+export const setStoredAuth = (value: StoredAuthCredentials, persist = false) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (persist) {
+    // Login "manter conectado" (PWA/mobile): sobrevive ao fechar o app.
+    window.localStorage.setItem(PORTAL_AUTH_STORAGE_KEY, JSON.stringify(value));
+    window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  } else {
     window.sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(value));
   }
 };

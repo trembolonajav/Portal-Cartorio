@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { inventoryApi } from '@/lib/inventory-api';
 import { getCurrentUsername } from '@/lib/auth';
-import type { Station, Person, Asset, AssetAssignment, Department, Employee, Space } from '../types/inventoryMap.types';
+import type { Station, Person, Asset, AssetAssignment, Department, Employee, Space, CheckResult, DivergenceType } from '../types/inventoryMap.types';
 
 export type HistoryActionType = string;
 
@@ -54,6 +54,8 @@ interface InventoryState {
   linkAsset: (assetId: string, stationId: string) => Promise<{ ok: boolean; error?: string }>;
   unlinkAsset: (assetId: string) => Promise<void>;
   transferAsset: (assetId: string, toStationId: string) => Promise<{ ok: boolean; error?: string }>;
+  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: string | null; registerMovement?: boolean; note?: string }) => Promise<{ ok: boolean; error?: string }>;
+  finalizeConference: (stationId: string) => Promise<void>;
 
   changeStationResponsible: (stationId: string, newEmployeeId: string | null, forceMove?: boolean) => Promise<void>;
 
@@ -145,6 +147,8 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         positionX: item.positionX ?? undefined,
         positionY: item.positionY ?? undefined,
         positionRotation: item.positionRotation ?? undefined,
+        lastConferenceAt: item.lastConferenceAt || undefined,
+        lastConferenceBy: item.lastConferenceBy || undefined,
       }));
 
       const assets = assetsRaw.map(item => ({
@@ -168,6 +172,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         depreciationRate: item.depreciationRate ?? undefined,
         usefulLifeYears: item.usefulLifeYears ?? undefined,
         warrantyUntil: item.warrantyUntil || undefined,
+        lastCheckAt: item.lastCheckAt || undefined,
+        lastCheckBy: item.lastCheckBy || undefined,
+        lastCheckResult: item.lastCheckResult || undefined,
       })) as (Asset & { stationId?: string; assignedAt?: string })[];
 
       const spaces: Space[] = spacesRaw.map(item => ({
@@ -422,6 +429,27 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : 'Erro ao transferir' };
     }
+  },
+
+  recordCheck: async (assetId, body) => {
+    try {
+      await inventoryApi.recordCheck(assetId, {
+        result: body.result,
+        divergenceType: body.divergenceType ?? null,
+        stationId: body.stationId ? Number(body.stationId) : null,
+        registerMovement: body.registerMovement ?? false,
+        note: body.note,
+      });
+      await get().refreshAll();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Erro ao registrar conferência' };
+    }
+  },
+
+  finalizeConference: async (stationId) => {
+    await inventoryApi.finalizeConference(stationId);
+    await get().refreshAll();
   },
 
   changeStationResponsible: async (stationId, newEmployeeId, forceMove = false) => {

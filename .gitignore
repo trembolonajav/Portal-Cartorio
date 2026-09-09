@@ -19,6 +19,11 @@ backup.sql
 # Dumps de segurança locais do banco (não versionar)
 *-backup-*.sql
 
+# Artefatos de importação com dados reais (nomes, inventário, senha) — repo é público
+docs/import-*
+docs/inventario-importacao-confirmada.csv
+docs/*.csv
+
 # Java
 backend/target/
 inventario/backend/target/

@@ -30,12 +30,35 @@ O repositorio sobe dois frontends integrados:
 
 ### Inventario
 
-- Cadastro e consulta de patrimonios.
+- Cadastro e consulta de patrimonios, com ficha detalhada (dados contabeis, depreciacao, garantia e vida util).
+- Catalogo de tipos de patrimonio com recortes ilustrados (mobiliario e equipamentos).
 - Categorias de patrimonio, incluindo CPU, monitor, perifericos, impressora, switch e leitor biometrico.
+- Hierarquia de espacos: Unidade -> Andar -> Departamento.
 - Estacoes, departamentos, responsaveis e vinculos de bens.
-- Mapa de ambientes com elementos estruturais e equipamentos inseriveis.
+- Mapa patrimonial ilustrado (visao superior): cada patrimonio vinculado desenha seu recorte na estacao; editor de planta com arrastar, girar e encaixe na grade; visao geral agrupada por unidade.
+- Arquivo: termos de responsabilidade, termos de troca de equipamento e solicitacoes, com PDF gerado.
 - Movimentacao e historico patrimonial.
 - Baixas patrimoniais com termo gerado, anexo assinado, finalizacao e rastreabilidade.
+- Conferencia fisica (PWA mobile) para inventario presencial. Veja a secao dedicada.
+
+## Conferencia fisica (PWA mobile)
+
+Aplicativo web instalavel (PWA) para conferir o patrimonio andando pelo cartorio, no celular, usando o mesmo backend e login do Inventario.
+
+- Acesso: abrir `http://IP-DO-SERVIDOR:8082` no navegador do celular e usar "Adicionar a tela inicial / Instalar". O app abre em `/conferencia`, em tela cheia.
+- Login proprio (Basic token), com opcao "manter conectado". O perfil `usuario` (estagiario) cai direto na conferencia; `operador` e `admin` tambem podem usar.
+- Navegacao por Unidade -> Andar -> Departamento -> Estacao, com progresso e cores de status (verde conferido, amarelo divergencia, vermelho nao localizado, cinza pendente).
+- Por estacao: marcar cada patrimonio como Encontrado, Divergencia (com tipo e observacao) ou Nao localizado; finalizar a estacao grava o selo de conferencia (data e responsavel).
+- "Adicionar patrimonio" por codigo: se ja existe em outra estacao, transfere para ca registrando a movimentacao; se existe sem local, vincula; se nao existe, abre o cadastro com o codigo preenchido.
+- Toda conferencia gera historico append-only (quem, quando, resultado) e a ultima conferencia fica registrada no patrimonio.
+
+Permissoes do estagiario (`usuario`): ve o inventario e faz a conferencia (incluir e movimentar por conferencia), mas nunca exclui nem edita cadastros administrativos.
+
+Endpoints principais da conferencia (API do Inventario):
+
+- `POST /api/v1/assets/{id}/check`
+- `GET /api/v1/assets/{id}/checks`
+- `POST /api/v1/stations/{id}/finalize-conference`
 
 ## Subir com Docker
 

@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   FileMinus2,
   Archive,
+  Shapes,
   Upload,
   Building2,
   Users,
@@ -24,6 +25,7 @@ type NavKey =
   | "patrimonios"
   | "mapa"
   | "espacos"
+  | "catalogo"
   | "departamentos"
   | "funcionarios"
   | "movimentacoes"
@@ -80,6 +82,7 @@ const AppShell = ({ active, actions, search, children }: AppShellProps) => {
     { key: "patrimonios", label: "Patrimônios", to: "/patrimonios", icon: Package, count: assets.length },
     { key: "mapa", label: "Mapa patrimonial", to: "/", icon: MapIcon },
     { key: "espacos", label: "Espaços e estações", to: "/espacos", icon: LayoutGrid },
+    { key: "catalogo", label: "Catálogo", to: "/catalogo", icon: Shapes },
     { key: "departamentos", label: "Departamentos", to: "/departamentos", icon: Building2 },
     { key: "funcionarios", label: "Funcionários", to: "/funcionarios", icon: Users, count: employeeCount || undefined },
     { key: "movimentacoes", label: "Movimentações", to: "#", icon: ArrowLeftRight, disabled: true },

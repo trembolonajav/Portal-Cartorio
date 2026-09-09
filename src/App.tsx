@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -817,6 +817,7 @@ function TicketDetail({
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [publicMessage, setPublicMessage] = useState("");
   const [internalMessage, setInternalMessage] = useState("");
+  const [showInternal, setShowInternal] = useState(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [resolutionForm, setResolutionForm] = useState({
     causa: "",
@@ -887,199 +888,151 @@ function TicketDetail({
   const publicComments = comments.filter((comment) => !comment.interno);
   const internalComments = comments.filter((comment) => comment.interno);
 
+  const inic = (n?: string) => (n ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
+  const atrasado = isAtrasado(ticket);
+  const kicker: CSSProperties = { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "#8A6E32" };
+
   return (
-    <div className="space-y-5">
-      {/* Barra de navegação do chamado (navy) — artboard 1b */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-[#00234B] px-6 py-4 text-white">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-white/70 transition-colors hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Fila de chamados
-        </button>
+    <div className="overflow-hidden rounded-xl border border-[#D6D1CA] bg-[#F5F3F1]" style={{ boxShadow: "0 24px 60px -40px rgba(0,35,75,.5)" }}>
+      {/* Barra navy — artboard 1b */}
+      <div className="flex flex-wrap items-center gap-4 bg-[#00234B] px-6 py-4 text-white">
+        <button onClick={onBack} className="text-sm text-white/70 transition-colors hover:text-white">← Fila de chamados</button>
         <span className="font-mono text-sm text-[#D7C5AC]">#{ticket.numero}</span>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{ticket.titulo}</span>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-        <section className="space-y-5">
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={ticket.status} />
-              <PriorityBadge priority={ticket.prioridade} />
-              <Badge className="text-slate-600">{ticket.setor?.nome ?? "-"}</Badge>
-              <Badge className="text-slate-600">{ticket.categoria?.nome ?? "-"}</Badge>
-            </div>
-            <h2 className="mt-3 text-3xl font-semibold text-[#00234B]">{ticket.titulo}</h2>
-            <div className="mt-6 grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
-              <Info label="Solicitante" value={ticket.criadoPor.nomeCompleto} />
-              <Info
-                label="Responsável"
-                value={ticket.atribuidoA?.nomeCompleto ?? "Não atribuído"}
-              />
-              <Info label="Aberto em" value={formatDateTime(ticket.createdAt)} />
-              <Info label="Prazo" value={formatDateTime(ticket.prazo)} />
-            </div>
+      <div className="flex flex-col xl:flex-row">
+        {/* ---------- conversa (esquerda) ---------- */}
+        <div className="flex min-w-0 flex-1 flex-col gap-5 p-7">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {atrasado && <span className="rounded-md border border-[#F0D4D1] bg-[#FBEDEC] px-2.5 py-1 text-[13px] font-semibold text-[#B4342B]">Atrasado</span>}
+            <StatusBadge status={ticket.status} />
+            <span className="text-[13px] text-[#6B7480]">Aberto em {formatDateTime(ticket.createdAt)} · {ticket.setor?.nome ?? "—"} · Categoria {ticket.categoria?.nome ?? "—"}</span>
           </div>
 
-          <DetailCard title="Descrição">
-            <p className="whitespace-pre-wrap text-slate-700">{ticket.descricao}</p>
-          </DetailCard>
+          <h2 className="text-[36px] font-semibold leading-tight text-[#00234B]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{ticket.titulo}</h2>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <DetailCard title="Anexos">
-              {ticket.anexos ? (
-                <p className="font-medium text-[#00234B]">{ticket.anexos}</p>
-              ) : (
-                <p className="text-slate-500">Nenhum anexo enviado.</p>
-              )}
-            </DetailCard>
-            <DetailCard title="Equipamento vinculado">
-              {ticket.equipamentoRelacionado ? (
-                <p className="font-medium">{ticket.equipamentoRelacionado}</p>
-              ) : (
-                <p className="text-slate-500">Nenhum equipamento vinculado.</p>
-              )}
-            </DetailCard>
+          {/* card do solicitante */}
+          <div className="flex flex-col gap-3 rounded-xl border border-[#E4E0DB] bg-white p-5">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#E9E4DA] text-[12px] font-semibold text-[#5B4A28]">{inic(ticket.criadoPor.nomeCompleto)}</span>
+              <strong className="text-sm text-[#1B2430]">{ticket.criadoPor.nomeCompleto}</strong>
+              <span className="text-[13px] text-[#8A9099]">abriu o chamado · {formatDateTime(ticket.createdAt)}</span>
+            </div>
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-[#3D4653]">{ticket.descricao}</p>
           </div>
 
-          <DetailCard title="Linha do tempo">
-            <div className="space-y-3">
-              <TimelineItem
-                date={ticket.createdAt}
-                text={`${ticket.criadoPor.nomeCompleto} abriu o chamado`}
-              />
-              {ticket.atribuidoA && (
-                <TimelineItem
-                  date={ticket.updatedAt}
-                  text={`${ticket.atribuidoA.nomeCompleto} assumiu o chamado`}
-                />
-              )}
-              <TimelineItem
-                date={ticket.updatedAt}
-                text={`Status atual: ${STATUS_LABEL[ticket.status]}`}
-              />
-              {comments.slice(-4).map((comment) => (
-                <TimelineItem
-                  key={comment.id}
-                  date={comment.createdAt}
-                  text={`Comentário: ${comment.mensagem}`}
-                />
-              ))}
-            </div>
-          </DetailCard>
-
-          <div className="grid gap-5 lg:grid-cols-2">
-            <DetailCard title="Resposta ao solicitante">
-              <CommentList comments={publicComments} />
-              {!canSendPublicComment && (
-                <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                  Chamado fechado. As respostas ficam bloqueadas após a resolução.
-                </p>
-              )}
-              <div className="mt-4 space-y-3">
-                <textarea
-                  value={publicMessage}
-                  onChange={(event) => setPublicMessage(event.target.value)}
-                  disabled={!canSendPublicComment}
-                  className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#00234B]"
-                  placeholder="Mensagem visível ao usuário"
-                />
-                <button
-                  onClick={() => sendComment(false)}
-                  disabled={!canSendPublicComment}
-                  className="rounded-md bg-[#00234B] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Enviar resposta
-                </button>
-              </div>
-            </DetailCard>
-
-            {isStaff && (
-              <DetailCard title="Comentários internos">
-                <CommentList comments={internalComments} />
-                <div className="mt-4 space-y-3">
-                  <textarea
-                    value={internalMessage}
-                    onChange={(event) => setInternalMessage(event.target.value)}
-                    disabled={!canInteract}
-                    className="min-h-28 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-[#00234B] disabled:cursor-not-allowed disabled:bg-slate-50"
-                    placeholder="Anotação interna para operador/admin"
-                  />
-                  <button
-                    onClick={() => sendComment(true)}
-                    disabled={!canInteract}
-                    className="rounded-md bg-[#00234B] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Salvar interno
-                  </button>
+          {/* thread */}
+          <div className="flex flex-col gap-3.5">
+            {publicComments.length === 0 && <p className="text-[13px] italic text-[#8A9099]">Sem respostas ainda.</p>}
+            {publicComments.map((c) => {
+              const requester = c.autor.id === ticket.criadoPor.id;
+              return (
+                <div key={c.id} className="flex gap-3">
+                  <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${requester ? "bg-[#E9E4DA] text-[#5B4A28]" : "bg-[#00234B] text-[#D7C5AC]"}`}>{inic(c.autor.nomeCompleto)}</span>
+                  <div className="flex max-w-[640px] flex-col gap-1.5 rounded-xl border border-[#E4E0DB] bg-white p-4">
+                    <div className="flex items-center gap-2"><strong className="text-[13px] text-[#1B2430]">{c.autor.nomeCompleto}</strong><span className="text-[12px] text-[#8A9099]">{formatDateTime(c.createdAt)}</span></div>
+                    <p className="text-sm leading-relaxed text-[#3D4653]">{c.mensagem}</p>
+                  </div>
                 </div>
-              </DetailCard>
+              );
+            })}
+          </div>
+
+          {/* reply bar */}
+          <div className="mt-auto flex flex-col gap-3 rounded-xl border border-[#E4E0DB] bg-white p-4">
+            <textarea
+              value={publicMessage}
+              onChange={(e) => setPublicMessage(e.target.value)}
+              disabled={!canSendPublicComment}
+              placeholder={`Escreva uma resposta para ${ticket.criadoPor.nomeCompleto.split(" ")[0]}…`}
+              className="min-h-[64px] w-full resize-none text-sm text-[#3D4653] outline-none placeholder:text-[#9AA1AB] disabled:opacity-60"
+            />
+            <div className="flex items-center gap-2.5">
+              <button onClick={() => toast.message("Anexar", { description: "Anexos em breve." })} className="flex h-8 items-center rounded-md border border-[#DEDAD3] px-3 text-[13px] text-[#3D4653]">Anexar</button>
+              {isStaff && (
+                <button onClick={() => setShowInternal((v) => !v)} className={`flex h-8 items-center rounded-md border px-3 text-[13px] ${showInternal ? "border-[#C9BCA5] bg-[#FBF7F0] text-[#5B4A28]" : "border-[#DEDAD3] text-[#3D4653]"}`}>Nota interna</button>
+              )}
+              <button onClick={() => sendComment(false)} disabled={!canSendPublicComment} className="ml-auto flex h-9 items-center rounded-lg bg-[#00234B] px-[18px] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Responder</button>
+            </div>
+            {isStaff && showInternal && (
+              <div className="flex flex-col gap-2 border-t border-[#EDEAE5] pt-3">
+                <textarea value={internalMessage} onChange={(e) => setInternalMessage(e.target.value)} disabled={!canInteract} placeholder="Anotação interna (operador/admin)" className="min-h-[56px] w-full resize-none rounded-lg border border-[#DEDAD3] p-2.5 text-sm outline-none focus:border-[#00234B] disabled:bg-slate-50" />
+                {internalComments.length > 0 && <div className="flex flex-col gap-1 text-[12px] text-[#6B7480]">{internalComments.slice(-3).map((c) => <div key={c.id}><strong className="text-[#1B2430]">{c.autor.nomeCompleto}:</strong> {c.mensagem}</div>)}</div>}
+                <button onClick={() => sendComment(true)} disabled={!canInteract} className="w-fit rounded-md border border-[#DEDAD3] px-3 py-1.5 text-[13px] font-medium text-[#3D4653] disabled:opacity-50">Salvar nota interna</button>
+              </div>
             )}
           </div>
-        </section>
+        </div>
 
-        <aside className="space-y-5">
-          {isStaff && <DetailCard title="Ações">
-            <div className="space-y-3">
-              <button
-                onClick={assumeTicket}
-                className="h-11 w-full rounded-md bg-[#00234B] font-semibold text-white disabled:opacity-50"
-                disabled={ticket.atribuidoA?.id === user.id || !canInteract}
-              >
-                Assumir chamado
-              </button>
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium">Alterar status</span>
-                <select
-                  value={ticket.status}
-                  onChange={(event) => patchTicket({ status: event.target.value as TicketStatus })}
-                  disabled={!canInteract}
-                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3"
-                >
-                  {Object.entries(STATUS_LABEL).filter(([value]) => value !== "resolvido" || isResolved).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium">Alterar prioridade</span>
-                <select
-                  value={ticket.prioridade}
-                  onChange={(event) =>
-                    patchTicket({ prioridade: event.target.value as TicketPriority })
-                  }
-                  disabled={!canInteract}
-                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3"
-                >
-                  {Object.entries(PRIORITY_LABEL).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                onClick={() => setResolutionOpen(true)}
-                className="h-11 w-full rounded-md bg-[#2F7A54] font-semibold text-white"
-                disabled={isResolved}
-              >
-                Resolver chamado
-              </button>
+        {/* ---------- contexto (direita) ---------- */}
+        <aside className="flex w-full shrink-0 flex-col gap-[22px] border-t border-[#E4E0DB] bg-white p-6 xl:w-[392px] xl:border-l xl:border-t-0">
+          <div className="flex flex-col gap-2.5">
+            <button onClick={() => setResolutionOpen(true)} disabled={isResolved} className="flex h-11 items-center justify-center rounded-[9px] bg-[#2F7A54] text-[15px] font-semibold text-white disabled:opacity-50">Resolver chamado</button>
+            <div className="flex gap-2.5">
+              {isStaff && ticket.atribuidoA?.id !== user.id ? (
+                <button onClick={assumeTicket} disabled={!canInteract} className="flex h-10 flex-1 items-center justify-center rounded-[9px] border border-[#DEDAD3] text-sm font-medium text-[#3D4653] disabled:opacity-50">Assumir</button>
+              ) : (
+                <button onClick={() => toast.message("Transferir", { description: "Transferência em breve." })} className="flex h-10 flex-1 items-center justify-center rounded-[9px] border border-[#DEDAD3] text-sm font-medium text-[#3D4653]">Transferir</button>
+              )}
+              <button onClick={() => toast.message("Reagendar SLA", { description: "Em breve." })} className="flex h-10 flex-1 items-center justify-center rounded-[9px] border border-[#DEDAD3] text-sm font-medium text-[#3D4653]">Reagendar SLA</button>
             </div>
-          </DetailCard>}
+          </div>
 
-          <DetailCard title="Resumo">
-            <div className="space-y-3 text-sm">
-              <Info label="Categoria" value={ticket.categoria?.nome ?? "-"} />
-              <Info label="Setor" value={ticket.setor?.nome ?? "-"} />
-              <Info label="Atualizado em" value={formatDateTime(ticket.updatedAt)} />
-              <Info label="Resolvido em" value={formatDateTime(ticket.resolvidoEm)} />
+          {/* ATENDIMENTO */}
+          <div className="flex flex-col gap-3">
+            <span style={kicker}>Atendimento</span>
+            <div className="flex items-center justify-between text-sm"><span className="text-[#6B7480]">Responsável</span><strong className="font-semibold text-[#1B2430]">{ticket.atribuidoA?.nomeCompleto ?? "Não atribuído"}</strong></div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[#6B7480]">Prioridade</span>
+              {isStaff && canInteract ? (
+                <select value={ticket.prioridade} onChange={(e) => patchTicket({ prioridade: e.target.value as TicketPriority })} className="cursor-pointer bg-transparent text-right text-sm font-semibold text-[#B4342B] outline-none">
+                  {Object.entries(PRIORITY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              ) : <strong className="font-semibold text-[#B4342B]">{PRIORITY_LABEL[ticket.prioridade]}</strong>}
             </div>
-          </DetailCard>
+            <div className="flex items-center justify-between text-sm"><span className="text-[#6B7480]">Prazo</span><strong className={`font-semibold ${atrasado ? "text-[#B4342B]" : "text-[#1B2430]"}`}>{formatDateTime(ticket.prazo)}</strong></div>
+            <div className="flex items-center justify-between text-sm"><span className="text-[#6B7480]">Setor</span><strong className="font-semibold text-[#1B2430]">{ticket.setor?.nome ?? "—"}</strong></div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[#6B7480]">Status</span>
+              {isStaff && canInteract ? (
+                <select value={ticket.status} onChange={(e) => patchTicket({ status: e.target.value as TicketStatus })} className="cursor-pointer bg-transparent text-right text-sm font-semibold text-[#00234B] outline-none">
+                  {Object.entries(STATUS_LABEL).filter(([v]) => v !== "resolvido" || isResolved).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              ) : <strong className="font-semibold text-[#00234B]">{STATUS_LABEL[ticket.status]}</strong>}
+            </div>
+          </div>
+
+          <div className="h-px bg-[#EDEAE5]" />
+
+          {/* PATRIMÔNIO VINCULADO */}
+          <div className="flex flex-col gap-3">
+            <span style={kicker}>Patrimônio vinculado</span>
+            {ticket.equipamentoRelacionado ? (
+              <>
+                <div className="flex flex-col gap-2.5 rounded-[10px] border border-[#E4E0DB] bg-[#FAF9F7] p-3.5">
+                  <strong className="text-sm text-[#1B2430]">{ticket.equipamentoRelacionado}</strong>
+                  <div className="flex gap-2">
+                    <button onClick={() => window.open(sameHostUrl(8082), "_blank")} className="flex h-[30px] items-center rounded-[7px] border border-[#C9BCA5] bg-[#FBF7F0] px-3 text-[13px] font-medium text-[#5B4A28]">Ver no mapa</button>
+                    <button onClick={() => toast.message("Histórico", { description: "Abra o patrimônio no Inventário." })} className="flex h-[30px] items-center rounded-[7px] border border-[#DEDAD3] px-3 text-[13px] text-[#3D4653]">Histórico</button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-[13px] text-[#6B7480]">Nenhum equipamento vinculado.</p>
+            )}
+          </div>
+
+          <div className="h-px bg-[#EDEAE5]" />
+
+          {/* LINHA DO TEMPO */}
+          <div className="flex flex-col gap-3.5">
+            <span style={kicker}>Linha do tempo</span>
+            <div className="flex gap-3"><span className="mt-[5px] h-[9px] w-[9px] rounded-full bg-[#00234B]" /><div className="flex flex-col"><span className="text-[13px] text-[#1B2430]">Chamado aberto</span><span className="text-[12px] text-[#8A9099]">{formatDateTime(ticket.createdAt)} · {ticket.criadoPor.nomeCompleto.split(" ")[0]}</span></div></div>
+            {ticket.atribuidoA && <div className="flex gap-3"><span className="mt-[5px] h-[9px] w-[9px] rounded-full bg-[#00234B]" /><div className="flex flex-col"><span className="text-[13px] text-[#1B2430]">Assumido pelo operador</span><span className="text-[12px] text-[#8A9099]">{ticket.atribuidoA.nomeCompleto.split(" ")[0]}</span></div></div>}
+            <div className="flex gap-3"><span className="mt-[5px] h-[9px] w-[9px] rounded-full bg-[#D7C5AC]" /><div className="flex flex-col"><span className="text-[13px] text-[#1B2430]">Status atual: {STATUS_LABEL[ticket.status]}</span><span className="text-[12px] text-[#8A9099]">{formatDateTime(ticket.updatedAt)}</span></div></div>
+            {atrasado && <div className="flex gap-3"><span className="mt-[5px] h-[9px] w-[9px] rounded-full bg-[#B4342B]" /><div className="flex flex-col"><span className="text-[13px] text-[#B4342B]">Prazo estourado</span><span className="text-[12px] text-[#8A9099]">{formatDateTime(ticket.prazo)}</span></div></div>}
+          </div>
         </aside>
       </div>
       {resolutionOpen && (

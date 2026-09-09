@@ -82,5 +82,24 @@
       inventory-backend:
         condition: service_healthy
 
+  # Proxy HTTPS interno para instalar o PWA de Conferência no celular.
+  # Serve https://SERVER_HOST -> inventory-frontend. Cert por CA interna do Caddy.
+  # Se a porta 443 já estiver em uso no host, troque para "9443:443" e acesse com :9443.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SERVER_HOST: ${SERVER_HOST:-192.168.0.186}
+    ports:
+      - "443:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - inventory-frontend
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,16 @@
+# HTTPS interno (rede local do cartório), sem internet/Let's Encrypt.
+# O Caddy usa uma CA própria (local_certs); o certificado-raiz precisa ser
+# instalado no celular uma vez para o navegador confiar e permitir instalar o PWA.
+{
+	local_certs
+	# Acesso por IP não envia SNI; sem isto o Caddy derruba o handshake.
+	default_sni {$SERVER_HOST:192.168.0.186}
+}
+
+# Endereço acessado pelo celular. Ajuste via env SERVER_HOST se o IP mudar.
+https://{$SERVER_HOST:192.168.0.186} {
+	encode gzip
+	# Todo o tráfego (SPA + /api) vai para o frontend do Inventário, que já
+	# serve o app e faz proxy de /api para o inventory-backend.
+	reverse_proxy inventory-frontend:80
+}

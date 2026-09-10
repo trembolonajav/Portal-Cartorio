@@ -3,7 +3,8 @@ import type { CSSProperties } from 'react';
 import { RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
-import type { Asset, Station } from '@/features/inventory-map/types/inventoryMap.types';
+import type { Asset, Station, FurnitureItem } from '@/features/inventory-map/types/inventoryMap.types';
+import EnvironmentLayer from './EnvironmentLayer';
 
 /*
  * Mapa patrimonial ilustrado (artboard 4b).
@@ -29,6 +30,10 @@ interface Props {
   onDragEnd?: (stationId: string, x: number, y: number) => void;
   onRotate?: (stationId: string) => void;
   onStationClick: (stationId: string) => void;
+  furniture?: FurnitureItem[];
+  selectedFurnId?: string | null;
+  onFurnitureChange?: (items: FurnitureItem[]) => void;
+  onSelectFurn?: (id: string | null) => void;
 }
 
 const GRID = 20;
@@ -133,7 +138,7 @@ const TileBody = ({ st, kind, state, sub, assets, rot, animate }: { st: Station;
   </>
 );
 
-const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing = false, positions, rotations, onDragEnd, onRotate, onStationClick }: Props) => {
+const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing = false, positions, rotations, onDragEnd, onRotate, onStationClick, furniture = [], selectedFurnId = null, onFurnitureChange, onSelectFurn }: Props) => {
   const allStations = useInventoryStore((s) => s.stations);
   const spaces = useInventoryStore((s) => s.spaces);
   const getEmployeeForStation = useInventoryStore((s) => s.getEmployeeForStation);
@@ -241,8 +246,8 @@ const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing 
   });
 
   const totalItems = tiles.reduce((s, t) => s + t.count, 0);
-  const canvasH = Math.max(560, ...tiles.map((t) => t.pos.y + 230));
-  const canvasW = Math.max(1060, ...tiles.map((t) => t.pos.x + TILE_W + 60));
+  const canvasH = Math.max(560, ...tiles.map((t) => t.pos.y + 230), ...furniture.map((f) => f.y + f.height + 40));
+  const canvasW = Math.max(1060, ...tiles.map((t) => t.pos.x + TILE_W + 60), ...furniture.map((f) => f.x + f.width + 60));
 
   const onPointerDown = (e: React.PointerEvent, id: string, pos: Pos) => {
     if (!editing) return;
@@ -280,7 +285,10 @@ const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing 
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerUp}
+            onClick={() => { if (editing) onSelectFurn?.(null); }}
           >
+            {/* Camada de mobília do ambiente, atrás das estações */}
+            <EnvironmentLayer items={furniture} editing={editing} selectedId={selectedFurnId} onSelect={(id) => onSelectFurn?.(id)} onChange={(its) => onFurnitureChange?.(its)} canvasRef={canvasRef} />
             {tiles.map(({ st, kind, state, sub, assets, rot, pos }) => (
               <div
                 key={st.id}

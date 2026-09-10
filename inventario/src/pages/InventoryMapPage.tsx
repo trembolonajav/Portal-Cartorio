@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Boxes, Search, Plus, Map as MapIcon, Pencil, Check, X } from 'lucide-react';
+import { Boxes, Search, Plus, Map as MapIcon, Pencil, Check, X, RotateCw, Trash2 } from 'lucide-react';
 import StationSheet from '@/components/inventory-map/StationSheet';
 import IllustratedMap from '@/components/inventory-map/IllustratedMap';
 import MapSelector, { isSelectableMap, spaceAncestors } from '@/components/inventory-map/MapSelector';
@@ -12,12 +12,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import { inventoryApi } from '@/lib/inventory-api';
-import type { SpaceType, StationStatus } from '@/features/inventory-map/types/inventoryMap.types';
+import type { SpaceType, StationStatus, FurnitureItem, FurnitureKind } from '@/features/inventory-map/types/inventoryMap.types';
 import { toast } from 'sonner';
 
 const SPACE_TYPE_LABELS: Record<SpaceType, string> = { UNIT: 'Unidade', BUILDING: 'Prédio', FLOOR: 'Andar', SECTOR: 'Departamento' };
 const emptyStation = { code: '', name: '', status: 'ACTIVE' as StationStatus };
 const defaultPos = (idx: number) => ({ x: 30 + (idx % 4) * 230, y: 60 + Math.floor(idx / 4) * 210 });
+
+// Paleta de mobília (só visual, atrás das estações).
+const FURN_PALETTE: { kind: FurnitureKind; label: string; w: number; h: number }[] = [
+  { kind: 'wall', label: 'Parede', w: 200, h: 8 },
+  { kind: 'partition', label: 'Divisória', w: 160, h: 6 },
+  { kind: 'cabinet', label: 'Armário', w: 170, h: 52 },
+  { kind: 'meeting', label: 'Mesa reunião', w: 200, h: 130 },
+  { kind: 'printer', label: 'Impressora', w: 64, h: 58 },
+  { kind: 'mfp', label: 'Multifuncional', w: 84, h: 76 },
+  { kind: 'phone', label: 'Telefone', w: 44, h: 40 },
+  { kind: 'label', label: 'Rótulo', w: 140, h: 26 },
+];
+const newFurnId = () => `f-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 const InventoryMapPage = () => {
   const spaces = useInventoryStore((s) => s.spaces);
@@ -25,6 +38,8 @@ const InventoryMapPage = () => {
   const addStation = useInventoryStore((s) => s.addStation);
   const updateStation = useInventoryStore((s) => s.updateStation);
   const refreshAll = useInventoryStore((s) => s.refreshAll);
+  const loadFurniture = useInventoryStore((s) => s.loadFurniture);
+  const saveFurniture = useInventoryStore((s) => s.saveFurniture);
 
   const [searchParams] = useSearchParams();
   const [activeMap, setActiveMap] = useState<string>('all');
@@ -44,6 +59,16 @@ const InventoryMapPage = () => {
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [rotations, setRotations] = useState<Record<string, number>>({});
   const [savingLayout, setSavingLayout] = useState(false);
+  const [furniture, setFurniture] = useState<FurnitureItem[]>([]);
+  const [selectedFurn, setSelectedFurn] = useState<string | null>(null);
+
+  // Mobília do ambiente por departamento (some no "Todos os espaços").
+  useEffect(() => {
+    if (activeMap === 'all') { setFurniture([]); return; }
+    let alive = true;
+    loadFurniture(activeMap).then((items) => { if (alive) setFurniture(items); });
+    return () => { alive = false; };
+  }, [activeMap, loadFurniture]);
 
   const [mapOpen, setMapOpen] = useState(false);
   const [mapForm, setMapForm] = useState({ name: '', type: 'SECTOR' as SpaceType, parentId: '' });
@@ -70,8 +95,24 @@ const InventoryMapPage = () => {
     setEditing(true);
     setSheetStationId(null);
   };
-  const cancelEdit = () => { setEditing(false); setPositions({}); setRotations({}); };
+  const cancelEdit = () => {
+    setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null);
+    if (activeMap !== 'all') loadFurniture(activeMap).then(setFurniture);
+  };
   const rotate = (id: string) => setRotations((r) => ({ ...r, [id]: ((r[id] ?? 0) + 90) % 360 }));
+
+  // Mobília
+  const addFurniture = (kind: FurnitureKind) => {
+    const spec = FURN_PALETTE.find((p) => p.kind === kind)!;
+    const id = newFurnId();
+    setFurniture((f) => [...f, { id, kind, x: 60, y: 60, width: spec.w, height: spec.h, rotation: 0, label: kind === 'label' ? 'SALA' : undefined }]);
+    setSelectedFurn(id);
+  };
+  const rotateFurn = () => setFurniture((f) => f.map((it) => (it.id === selectedFurn ? { ...it, rotation: (it.rotation + 15) % 360 } : it)));
+  const removeFurn = () => { setFurniture((f) => f.filter((it) => it.id !== selectedFurn)); setSelectedFurn(null); };
+  const setFurnLabel = (text: string) => setFurniture((f) => f.map((it) => (it.id === selectedFurn ? { ...it, label: text } : it)));
+  const selectedFurnItem = furniture.find((it) => it.id === selectedFurn) || null;
+
   const saveLayout = async () => {
     setSavingLayout(true);
     try {
@@ -83,9 +124,10 @@ const InventoryMapPage = () => {
           positionX: p.x, positionY: p.y, positionRotation: rotations[st.id] ?? st.positionRotation ?? 0,
         });
       }
+      if (activeMap !== 'all') await saveFurniture(activeMap, furniture);
       await refreshAll();
       toast.success('Planta salva');
-      setEditing(false); setPositions({}); setRotations({});
+      setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null);
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao salvar planta'); }
     finally { setSavingLayout(false); }
   };
@@ -140,9 +182,21 @@ const InventoryMapPage = () => {
           <MapSelector spaces={spaces} value={activeMap} onChange={setActiveMap} disabled={editing} />
 
           {editing ? (
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-[13px] text-brass-ink">Arraste as estações para montar a planta</span>
-              <Button size="sm" variant="outline" className="h-9" onClick={cancelEdit}><X className="mr-1.5 h-3.5 w-3.5" />Cancelar</Button>
+            <div className="flex flex-1 flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[12px] font-medium text-muted-foreground">Mobília:</span>
+              {FURN_PALETTE.map((p) => (
+                <Button key={p.kind} size="sm" variant="outline" className="h-8 px-2 text-[12px]" onClick={() => addFurniture(p.kind)}>+ {p.label}</Button>
+              ))}
+              {selectedFurnItem && (
+                <div className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/[0.05] px-2 py-1">
+                  {selectedFurnItem.kind === 'label' && (
+                    <Input value={selectedFurnItem.label ?? ''} onChange={(e) => setFurnLabel(e.target.value)} placeholder="Nome da sala" className="h-7 w-32 text-xs" />
+                  )}
+                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={rotateFurn} title="Girar 15°"><RotateCw className="h-3.5 w-3.5" /></Button>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-destructive hover:text-destructive" onClick={removeFurn} title="Remover"><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              )}
+              <Button size="sm" variant="outline" className="ml-auto h-9" onClick={cancelEdit}><X className="mr-1.5 h-3.5 w-3.5" />Cancelar</Button>
               <Button size="sm" className="h-9" onClick={saveLayout} disabled={savingLayout}><Check className="mr-1.5 h-3.5 w-3.5" />Salvar planta</Button>
             </div>
           ) : (
@@ -165,6 +219,10 @@ const InventoryMapPage = () => {
             onDragEnd={(id, x, y) => setPositions((p) => ({ ...p, [id]: { x, y } }))}
             onRotate={rotate}
             onStationClick={setSheetStationId}
+            furniture={furniture}
+            selectedFurnId={selectedFurn}
+            onFurnitureChange={setFurniture}
+            onSelectFurn={setSelectedFurn}
           />
         </div>
       </div>

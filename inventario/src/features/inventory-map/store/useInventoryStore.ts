@@ -1,7 +1,13 @@
 import { create } from 'zustand';
 import { inventoryApi } from '@/lib/inventory-api';
 import { getCurrentUsername } from '@/lib/auth';
-import type { Station, Person, Asset, AssetAssignment, Department, Employee, Space, CheckResult, DivergenceType } from '../types/inventoryMap.types';
+import type { Station, Person, Asset, AssetAssignment, Department, Employee, Space, CheckResult, DivergenceType, FurnitureItem, FurnitureKind } from '../types/inventoryMap.types';
+import type { ApiLayout, ApiLayoutElement } from '@/lib/inventory-api';
+
+const kindToElementType = (k: FurnitureKind): ApiLayoutElement['elementType'] =>
+  k === 'wall' ? 'WALL' : k === 'partition' ? 'PARTITION' : k === 'label' ? 'LABEL' : 'ROOM_BLOCK';
+const elementTypeToKind = (t: string): FurnitureKind =>
+  t === 'WALL' ? 'wall' : t === 'PARTITION' ? 'partition' : t === 'LABEL' ? 'label' : 'cabinet';
 
 export type HistoryActionType = string;
 
@@ -56,6 +62,8 @@ interface InventoryState {
   transferAsset: (assetId: string, toStationId: string) => Promise<{ ok: boolean; error?: string }>;
   recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: string | null; registerMovement?: boolean; note?: string }) => Promise<{ ok: boolean; error?: string }>;
   finalizeConference: (stationId: string) => Promise<void>;
+  loadFurniture: (spaceId: string) => Promise<FurnitureItem[]>;
+  saveFurniture: (spaceId: string, items: FurnitureItem[]) => Promise<void>;
 
   changeStationResponsible: (stationId: string, newEmployeeId: string | null, forceMove?: boolean) => Promise<void>;
 
@@ -450,6 +458,37 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   finalizeConference: async (stationId) => {
     await inventoryApi.finalizeConference(stationId);
     await get().refreshAll();
+  },
+
+  loadFurniture: async (spaceId) => {
+    try {
+      const layout = await inventoryApi.getLayout(spaceId);
+      if (!layout?.elements) return [];
+      return layout.elements
+        .filter((el) => el.id !== '_empty')
+        .map((el) => ({
+          id: el.id,
+          kind: ((el.metadata?.kind as FurnitureKind) ?? elementTypeToKind(el.elementType)),
+          x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation || 0,
+          label: el.label || undefined,
+        }));
+    } catch { return []; }
+  },
+
+  saveFurniture: async (spaceId, items) => {
+    const space = get().spaces.find((s) => s.id === spaceId);
+    const list = items.length ? items : [{ id: '_empty', kind: 'label', x: 0, y: 0, width: 0, height: 0, rotation: 0 } as FurnitureItem];
+    const elements = list.map((f, i) => ({
+      id: f.id,
+      elementType: kindToElementType(f.kind),
+      layer: f.kind === 'wall' || f.kind === 'partition' ? 'structural' : f.kind === 'label' ? 'labels' : 'furniture',
+      x: Math.round(f.x), y: Math.round(f.y), width: Math.round(f.width), height: Math.round(f.height),
+      rotation: Math.round(f.rotation), label: f.label, zIndex: i, metadata: { kind: f.kind },
+    })) as ApiLayoutElement[];
+    await inventoryApi.saveLayout(spaceId, {
+      id: '', name: space?.name || 'Ambiente', code: `ENV-${spaceId}`,
+      width: 2000, height: 1400, spaceId: Number(spaceId), elements,
+    } as ApiLayout);
   },
 
   changeStationResponsible: async (stationId, newEmployeeId, forceMove = false) => {

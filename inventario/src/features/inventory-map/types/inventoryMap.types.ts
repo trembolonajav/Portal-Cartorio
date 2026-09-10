@@ -41,6 +41,20 @@ export interface Station {
   lastConferenceBy?: string;
 }
 
+// Mobília do ambiente (camada visual atrás das estações; não é inventário).
+export type FurnitureKind = 'wall' | 'partition' | 'cabinet' | 'meeting' | 'printer' | 'mfp' | 'phone' | 'label';
+
+export interface FurnitureItem {
+  id: string;
+  kind: FurnitureKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  label?: string;
+}
+
 export type CheckResult = 'FOUND' | 'NOT_FOUND' | 'DIVERGENCE';
 export type DivergenceType =
   | 'WRONG_LOCATION' | 'WRONG_OWNER' | 'WRONG_DESCRIPTION' | 'NO_TAG'

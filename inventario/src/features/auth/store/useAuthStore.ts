@@ -54,6 +54,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (username, password, remember = false) => {
     set({ status: "loading", error: null });
+    // An explicit login must not be overridden by an older shared portal cookie.
+    clearStoredAuth();
     setStoredAuth({ username, token: buildBasicToken(username, password) }, remember);
 
     try {

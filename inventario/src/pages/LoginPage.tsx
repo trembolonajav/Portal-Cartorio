@@ -1,13 +1,17 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/features/auth/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, User, Lock } from "lucide-react";
+import logoCartorio from '@/assets/logo-cartorio.png';
+import { loginDestination } from '@/lib/login-destination';
 
 const LoginPage = () => {
-  const navigate = useNavigate();
+  const location = useLocation();
+  const status = useAuthStore(s => s.status);
+  const role = useAuthStore(s => s.user?.role);
   const login = useAuthStore((s) => s.login);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -22,8 +26,6 @@ const LoginPage = () => {
     setError(null);
     try {
       await login(username.trim(), password, remember);
-      const role = useAuthStore.getState().user?.role;
-      navigate(role === "USER" ? "/conferencia" : "/", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao autenticar");
     } finally {
@@ -31,15 +33,17 @@ const LoginPage = () => {
     }
   };
 
+  if (status === 'authenticated') {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    return <Navigate to={loginDestination(location.state?.returnTo, role, standalone)} replace />;
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-primary text-white">
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-champagne/40 bg-white/5">
-            <svg viewBox="0 0 24 40" className="h-9 w-9 text-champagne" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 2C6 10 6 24 12 38C18 24 18 10 12 2Z" />
-              <path d="M12 6V34M12 12L7 15M12 12L17 15M12 20L7 23M12 20L17 23" />
-            </svg>
+            <img src={logoCartorio} alt="Cartório Índio Artiaga" className="h-[42px] w-[30px] object-contain" />
           </div>
           <h1 className="font-serif text-2xl font-semibold tracking-wide">PORTAL ÍNDIO ARTIAGA</h1>
           <p className="mt-1 text-sm text-champagne">Conferência de Patrimônio</p>

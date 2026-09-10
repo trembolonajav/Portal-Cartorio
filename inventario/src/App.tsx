@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -30,6 +30,7 @@ const LoadingScreen = () => (
 );
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
   const status = useAuthStore((state) => state.status);
 
   if (status === "loading") {
@@ -37,7 +38,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (status !== "authenticated") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ returnTo: location.pathname + location.search + location.hash }} replace />;
   }
 
   return <>{children}</>;
@@ -46,6 +47,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Páginas administrativas/desktop: exigem ADMIN ou OPERATOR.
 // O estagiário (USER) é enviado direto para a Conferência (mobile).
 const InventoryRoute = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
   const status = useAuthStore((state) => state.status);
   const role = useAuthStore((state) => state.user?.role);
 
@@ -53,7 +55,7 @@ const InventoryRoute = ({ children }: { children: React.ReactNode }) => {
     return <LoadingScreen />;
   }
   if (status !== "authenticated") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ returnTo: location.pathname + location.search + location.hash }} replace />;
   }
   if (role === "USER") {
     return <Navigate to="/conferencia" replace />;
@@ -115,8 +117,8 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <AppInit>
-        <BrowserRouter>
+      <BrowserRouter>
+        <AppInit>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/conferencia" element={<ProtectedRoute><ConferenciaPage /></ProtectedRoute>} />
@@ -133,8 +135,8 @@ const App = () => (
             <Route path="/importar" element={<InventoryRoute><AdminRoute><ImportarPage /></AdminRoute></InventoryRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
-      </AppInit>
+        </AppInit>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );

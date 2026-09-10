@@ -1,5 +1,5 @@
 // Service worker mínimo para instalar o PWA e um shell offline básico.
-const CACHE = "inv-conf-v1";
+const CACHE = "inv-conf-v2";
 const SHELL = ["/", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -9,7 +9,7 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
+    for (const key of await caches.keys()) if (key.startsWith('inv-conf-') && key !== CACHE) await caches.delete(key);
     await self.clients.claim();
   })());
 });

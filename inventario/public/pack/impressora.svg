@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 84 72" fill="none">
+  <!-- bandeja de papel (topo) -->
+  <rect x="24" y="4" width="36" height="16" rx="2" fill="#F4F5F6" stroke="#9AA1AA" stroke-width="1.5"/>
+  <!-- corpo -->
+  <rect x="10" y="16" width="64" height="40" rx="6" fill="#ECEDEF" stroke="#5B6470" stroke-width="2"/>
+  <!-- saida de papel -->
+  <rect x="20" y="44" width="44" height="12" rx="2" fill="#DDDFE2" stroke="#B9BEC5" stroke-width="1"/>
+  <!-- painel -->
+  <rect x="16" y="22" width="14" height="8" rx="1.5" fill="#2C3038"/>
+  <circle cx="66" cy="26" r="2.4" fill="#5FB98C"/>
+  <!-- base -->
+  <rect x="14" y="56" width="56" height="8" rx="3" fill="#E0E1E4" stroke="#B9BEC5" stroke-width="1"/>
+</svg>

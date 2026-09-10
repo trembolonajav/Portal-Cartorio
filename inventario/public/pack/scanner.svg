@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 92 72" fill="none">
+  <!-- corpo / base -->
+  <rect x="8" y="10" width="76" height="52" rx="6" fill="#E0E1E4" stroke="#5B6470" stroke-width="2"/>
+  <!-- tampa de vidro -->
+  <rect x="14" y="8" width="64" height="40" rx="4" fill="#F7F8FA" stroke="#9AA1AA" stroke-width="1.5"/>
+  <!-- vidro interno -->
+  <rect x="20" y="13" width="52" height="30" rx="2" fill="#EDF0F3" stroke="#C7CDD4" stroke-width="1"/>
+  <!-- dobradica -->
+  <rect x="36" y="48" width="20" height="5" rx="2" fill="#9AA1AA"/>
+  <!-- painel -->
+  <circle cx="74" cy="55" r="2.4" fill="#5FB98C"/>
+  <rect x="14" y="52" width="12" height="5" rx="1.5" fill="#2C3038"/>
+</svg>

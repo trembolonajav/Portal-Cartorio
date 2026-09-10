@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 34" fill="none">
+  <rect x="2" y="4" width="124" height="26" rx="3" fill="#33383F" stroke="#5B6470" stroke-width="2"/>
+  <!-- orelhas de rack -->
+  <rect x="0" y="10" width="6" height="14" rx="1.5" fill="#5B6470"/>
+  <rect x="122" y="10" width="6" height="14" rx="1.5" fill="#5B6470"/>
+  <!-- portas -->
+  <g fill="#1E2228" stroke="#7C8894" stroke-width="0.8">
+    <rect x="12" y="12" width="8" height="10" rx="1"/><rect x="22" y="12" width="8" height="10" rx="1"/>
+    <rect x="32" y="12" width="8" height="10" rx="1"/><rect x="42" y="12" width="8" height="10" rx="1"/>
+    <rect x="52" y="12" width="8" height="10" rx="1"/><rect x="62" y="12" width="8" height="10" rx="1"/>
+    <rect x="72" y="12" width="8" height="10" rx="1"/><rect x="82" y="12" width="8" height="10" rx="1"/>
+  </g>
+  <!-- leds -->
+  <circle cx="100" cy="17" r="1.6" fill="#5FB98C"/><circle cx="106" cy="17" r="1.6" fill="#5FB98C"/><circle cx="112" cy="17" r="1.6" fill="#5FB98C"/>
+</svg>

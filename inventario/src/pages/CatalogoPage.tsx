@@ -25,9 +25,14 @@ const MOBILIARIO = [
 ];
 const EQUIPAMENTOS = [
   { img: 'monitor.png', name: 'Monitor', meta: 'categoria Monitor' },
-  { img: 'gabinete-torre.png', name: 'Gabinete', meta: 'categoria CPU' },
+  { img: 'gabinete-torre.png', name: 'Gabinete', meta: 'categoria CPU/Desktop' },
+  { img: 'notebook.svg', name: 'Notebook', meta: 'categoria Notebook' },
   { img: 'teclado.png', name: 'Teclado', meta: 'periférico' },
   { img: 'mouse.png', name: 'Mouse', meta: 'periférico' },
+  { img: 'impressora.svg', name: 'Impressora', meta: 'categoria Impressora' },
+  { img: 'multifuncional.svg', name: 'Multifuncional', meta: 'impressora + scanner' },
+  { img: 'scanner.svg', name: 'Scanner', meta: 'categoria Scanner' },
+  { img: 'switch.svg', name: 'Switch', meta: 'rede · rack' },
 ];
 
 const CatalogoPage = () => (

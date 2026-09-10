@@ -51,21 +51,34 @@ const partsOf = (assets: Asset[]) => {
   const hasCpu = assets.some((a) => RE.cpu.test(a.type));
   const hasTeclado = assets.some((a) => RE.teclado.test(a.type));
   const hasMouse = assets.some((a) => RE.mouse.test(a.type));
-  const hasCadeira = assets.some((a) => RE.cadeira.test(a.type));
   const others = assets.filter(
     (a) => ![RE.monitor, RE.cpu, RE.teclado, RE.mouse, RE.cadeira, RE.mesa].some((re) => re.test(a.type)),
   );
-  return { monitors, hasCpu, hasTeclado, hasMouse, hasCadeira, others };
+  return { monitors, hasCpu, hasTeclado, hasMouse, others };
 };
+
+// Periféricos com recorte próprio (aparecem como ícone; o resto vira chip de texto).
+const ITEM_ICON: { re: RegExp; src: string }[] = [
+  { re: /notebook|laptop/i, src: 'notebook.svg' },
+  { re: /multifun|mfp/i, src: 'multifuncional.svg' },
+  { re: /impressora|printer/i, src: 'impressora.svg' },
+  { re: /scanner/i, src: 'scanner.svg' },
+  { re: /switch|patch|rede/i, src: 'switch.svg' },
+];
+const itemIcon = (type: string) => ITEM_ICON.find((i) => i.re.test(type))?.src;
 
 const chip: CSSProperties = {
   fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, lineHeight: '15px',
   padding: '0 5px', borderRadius: 4, border: '1px solid #DCD7CF',
   background: '#fff', color: '#5C6675', whiteSpace: 'nowrap',
 };
+const miniLabel: CSSProperties = {
+  fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, lineHeight: '10px',
+  color: '#8A9099', maxWidth: 42, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center',
+};
 
 const Workstation = ({ assets, state }: { assets: Asset[]; state: TileState }) => {
-  const { monitors, hasCpu, hasTeclado, hasMouse, hasCadeira, others } = partsOf(assets);
+  const { monitors, hasCpu, hasTeclado, hasMouse, others } = partsOf(assets);
   const searchOutline: CSSProperties = state === 'search' ? { outline: '3px solid #8A6E32', outlineOffset: 2, borderRadius: 2 } : {};
   const attentionOutline: CSSProperties = state === 'attention' ? { outline: '3px solid #B4342B', outlineOffset: 2, borderRadius: 3 } : {};
   const n = Math.min(monitors, 4);
@@ -75,7 +88,7 @@ const Workstation = ({ assets, state }: { assets: Asset[]; state: TileState }) =
   const startX = Math.round((170 - totalW) / 2);
 
   return (
-    <div style={{ position: 'relative', width: 170, height: 150 + (others.length ? 26 : 0), pointerEvents: 'none' }}>
+    <div style={{ position: 'relative', width: 170, height: 150 + (others.length ? 46 : 0), pointerEvents: 'none' }}>
       <img src={P('mesa-reta-recorte.png')} alt="" style={{ position: 'absolute', left: 0, top: 0, width: 170, display: 'block', ...attentionOutline }} />
       {hasCpu && <img src={P('gabinete-torre.png')} alt="" style={{ position: 'absolute', left: 12, top: 30, width: 17, display: 'block' }} />}
       {Array.from({ length: n }).map((_, i) => (
@@ -83,10 +96,21 @@ const Workstation = ({ assets, state }: { assets: Asset[]; state: TileState }) =
       ))}
       {hasTeclado && <img src={P('teclado.png')} alt="" style={{ position: 'absolute', left: 48, top: 44, width: 76, display: 'block' }} />}
       {hasMouse && <img src={P('mouse.png')} alt="" style={{ position: 'absolute', left: 132, top: 46, width: 15, display: 'block' }} />}
-      {hasCadeira && <img src={P('cadeira-giratoria.png')} alt="" style={{ position: 'absolute', left: 62, top: 96, width: 48, display: 'block' }} />}
+      {/* Cadeira é mobília (não é patrimônio), desenhada sempre para dar contexto espacial. */}
+      <img src={P('cadeira-giratoria.png')} alt="" style={{ position: 'absolute', left: 62, top: 96, width: 48, display: 'block' }} />
       {others.length > 0 && (
-        <div style={{ position: 'absolute', left: 0, top: 150, display: 'flex', flexWrap: 'wrap', gap: 4, width: 170 }}>
-          {others.map((o) => <span key={o.id} style={chip} title={o.description}>{o.type}</span>)}
+        <div style={{ position: 'absolute', left: 0, top: 150, display: 'flex', flexWrap: 'wrap', gap: 6, width: 170, alignItems: 'flex-end' }}>
+          {others.map((o) => {
+            const ic = itemIcon(o.type);
+            return ic ? (
+              <div key={o.id} title={`${o.type} · ${o.description}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 42 }}>
+                <img src={P(ic)} alt="" style={{ height: 24, maxWidth: 42, objectFit: 'contain', display: 'block' }} />
+                <span style={miniLabel}>{o.type}</span>
+              </div>
+            ) : (
+              <span key={o.id} style={chip} title={o.description}>{o.type}</span>
+            );
+          })}
         </div>
       )}
     </div>

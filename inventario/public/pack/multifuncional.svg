@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 104 96" fill="none">
+  <!-- bandejas laterais -->
+  <rect x="2" y="46" width="18" height="22" rx="2" fill="#DDDFE2" stroke="#9AA1AA" stroke-width="1.5"/>
+  <rect x="84" y="46" width="18" height="22" rx="2" fill="#DDDFE2" stroke="#9AA1AA" stroke-width="1.5"/>
+  <!-- corpo -->
+  <rect x="16" y="10" width="72" height="62" rx="7" fill="#ECEDEF" stroke="#5B6470" stroke-width="2"/>
+  <!-- alimentador (tampa superior) -->
+  <rect x="24" y="6" width="56" height="34" rx="5" fill="#F4F5F6" stroke="#9AA1AA" stroke-width="1.5"/>
+  <path d="M46 14 h16 l-4 12 h-8 z" fill="#C7CDD4"/>
+  <!-- painel de controle -->
+  <rect x="30" y="46" width="44" height="16" rx="3" fill="#2C3038" stroke="#5B6470" stroke-width="1.5"/>
+  <rect x="34" y="49" width="18" height="10" rx="1.5" fill="#3C4956"/>
+  <circle cx="70" cy="54" r="2.6" fill="#5FB98C"/>
+  <!-- gavetas -->
+  <rect x="24" y="64" width="56" height="6" rx="2" fill="#E0E1E4" stroke="#B9BEC5" stroke-width="1"/>
+</svg>

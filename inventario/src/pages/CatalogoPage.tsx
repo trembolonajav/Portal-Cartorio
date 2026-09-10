@@ -31,7 +31,7 @@ const EQUIPAMENTOS = [
   { img: 'teclado.png', name: 'Teclado', meta: 'periférico' },
   { img: 'mouse.png', name: 'Mouse', meta: 'periférico' },
   { img: 'impressora.svg', name: 'Impressora', meta: 'categoria Impressora' },
-  { img: 'multifuncional.svg', name: 'Multifuncional', meta: 'impressora + scanner' },
+  { img: 's4-037.png', name: 'Multifuncional', meta: 'impressora + scanner' },
   { img: 'scanner.svg', name: 'Scanner', meta: 'categoria Scanner' },
   { img: 'switch.svg', name: 'Switch', meta: 'rede · rack' },
 ];

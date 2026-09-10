@@ -14,7 +14,7 @@ const SRC: Partial<Record<FurnitureKind, string>> = {
   cabinet: 'armario-topo.svg',
   meeting: 's3-002.png',
   printer: 'impressora.svg',
-  mfp: 'multifuncional.svg',
+  mfp: 's4-037.png',
   phone: 'telefone.svg',
 };
 

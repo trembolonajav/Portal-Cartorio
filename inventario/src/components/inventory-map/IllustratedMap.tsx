@@ -65,7 +65,7 @@ const partsOf = (assets: Asset[]) => {
 // Periféricos com recorte próprio (aparecem como ícone; o resto vira chip de texto).
 const ITEM_ICON: { re: RegExp; src: string }[] = [
   { re: /notebook|laptop/i, src: 'notebook.svg' },
-  { re: /multifun|mfp/i, src: 'multifuncional.svg' },
+  { re: /multifun|mfp/i, src: 's4-037.png' },
   { re: /impressora|printer/i, src: 'impressora.svg' },
   { re: /scanner/i, src: 'scanner.svg' },
   { re: /switch|patch|rede/i, src: 'switch.svg' },

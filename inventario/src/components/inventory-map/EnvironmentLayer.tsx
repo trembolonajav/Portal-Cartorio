@@ -60,7 +60,15 @@ const EnvironmentLayer = ({ items, editing, selectedId, onSelect, onChange, canv
     onChange(items.map((it) => {
       if (it.id !== d.id) return it;
       if (d.mode === 'move') return { ...it, x: snap(Math.max(0, d.ox + (p.x - d.sx))), y: snap(Math.max(0, d.oy + (p.y - d.sy))) };
-      return { ...it, width: Math.max(GRID, snap(d.ow + (p.x - d.sx))), height: Math.max(GRID, snap(d.oh + (p.y - d.sy))) };
+      // Parede/divisória/rótulo: resize livre. Móveis com imagem: escala mantendo a proporção.
+      const free = it.kind === 'wall' || it.kind === 'partition' || it.kind === 'label';
+      if (free) {
+        return { ...it, width: Math.max(GRID, snap(d.ow + (p.x - d.sx))), height: Math.max(GRID, snap(d.oh + (p.y - d.sy))) };
+      }
+      const scale = Math.max((d.ow + (p.x - d.sx)) / d.ow, (d.oh + (p.y - d.sy)) / d.oh, GRID / d.ow, GRID / d.oh);
+      const width = snap(d.ow * scale);
+      const height = Math.round(width * (d.oh / d.ow));
+      return { ...it, width, height };
     }));
   };
   const up = () => { drag.current = null; };

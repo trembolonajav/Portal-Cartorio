@@ -81,6 +81,7 @@ const EnvironmentLayer = ({ items, editing, selectedId, onSelect, onChange, canv
               onPointerDown={editing ? (e) => down(e, f, 'move') : undefined}
               onPointerMove={editing ? move : undefined}
               onPointerUp={editing ? up : undefined}
+              onClick={editing ? (e) => { e.stopPropagation(); onSelect(f.id); } : undefined}
               style={{
                 position: 'absolute', left: f.x, top: f.y, width: f.width, height: f.height,
                 transform: `rotate(${f.rotation}deg)`, transformOrigin: 'center', touchAction: 'none',

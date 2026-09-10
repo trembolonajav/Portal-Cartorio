@@ -1,9 +1,11 @@
 import { useRef } from 'react';
 import type { CSSProperties } from 'react';
+import { RotateCw, X } from 'lucide-react';
 import type { FurnitureItem, FurnitureKind } from '@/features/inventory-map/types/inventoryMap.types';
 
 /* Camada de mobília do ambiente (paredes, armários, mesas de reunião, etc.).
- * Visual, atrás das estações. Editável (arrastar/redimensionar/selecionar) no modo planta. */
+ * Visual, atrás das estações. No modo planta fica por cima e editável
+ * (arrastar / redimensionar / girar / remover). */
 
 const GRID = 20;
 const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -23,7 +25,7 @@ const FurnitureView = ({ f }: { f: FurnitureItem }) => {
     const fs = Math.max(9, Math.min(f.height * 0.5, 16));
     return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: fs, letterSpacing: '.1em', color: '#5C6675', textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.1 }}>{f.label || 'SALA'}</div>;
   }
-  return <img src={`/pack/${SRC[f.kind]}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />;
+  return <img src={`/pack/${SRC[f.kind]}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} draggable={false} />;
 };
 
 interface Props {
@@ -42,7 +44,6 @@ const EnvironmentLayer = ({ items, editing, selectedId, onSelect, onChange, canv
     const r = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
-
   const down = (e: React.PointerEvent, f: FurnitureItem, mode: 'move' | 'resize') => {
     if (!editing) return;
     e.stopPropagation();
@@ -63,31 +64,42 @@ const EnvironmentLayer = ({ items, editing, selectedId, onSelect, onChange, canv
     }));
   };
   const up = () => { drag.current = null; };
+  const rotate = (id: string) => onChange(items.map((it) => (it.id === id ? { ...it, rotation: (it.rotation + 45) % 360 } : it)));
+  const remove = (id: string) => { onChange(items.filter((it) => it.id !== id)); onSelect(null); };
 
-  const handle: CSSProperties = { position: 'absolute', right: -7, bottom: -7, width: 15, height: 15, borderRadius: 3, background: '#00234B', border: '2px solid #fff', cursor: 'nwse-resize', touchAction: 'none' };
+  const handle: CSSProperties = { position: 'absolute', right: -9, bottom: -9, width: 18, height: 18, borderRadius: 4, background: '#00234B', border: '2px solid #fff', boxShadow: '0 1px 3px rgba(0,0,0,.35)', cursor: 'nwse-resize', touchAction: 'none' };
+  const tbBtn: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, background: '#fff', border: '1px solid #C7CDD4', boxShadow: '0 1px 3px rgba(0,0,0,.2)', cursor: 'pointer' };
 
   return (
     <>
-      {items.map((f) => (
-        <div
-          key={f.id}
-          onPointerDown={editing ? (e) => down(e, f, 'move') : undefined}
-          onPointerMove={editing ? move : undefined}
-          onPointerUp={editing ? up : undefined}
-          style={{
-            position: 'absolute', left: f.x, top: f.y, width: f.width, height: f.height,
-            transform: `rotate(${f.rotation}deg)`, transformOrigin: 'center', touchAction: 'none',
-            cursor: editing ? 'move' : 'default',
-            outline: editing && selectedId === f.id ? '2px solid #00234B' : editing ? '1px dashed rgba(0,35,75,.28)' : undefined,
-            outlineOffset: 1,
-          }}
-        >
-          <FurnitureView f={f} />
-          {editing && selectedId === f.id && (
-            <div onPointerDown={(e) => down(e, f, 'resize')} onPointerMove={move} onPointerUp={up} style={handle} />
-          )}
-        </div>
-      ))}
+      {items.map((f) => {
+        const sel = editing && selectedId === f.id;
+        const z = editing ? (sel ? 13 : 12) : 0;
+        return (
+          <div key={f.id}>
+            <div
+              onPointerDown={editing ? (e) => down(e, f, 'move') : undefined}
+              onPointerMove={editing ? move : undefined}
+              onPointerUp={editing ? up : undefined}
+              style={{
+                position: 'absolute', left: f.x, top: f.y, width: f.width, height: f.height,
+                transform: `rotate(${f.rotation}deg)`, transformOrigin: 'center', touchAction: 'none',
+                cursor: editing ? 'move' : 'default', zIndex: z,
+                outline: sel ? '2px solid #00234B' : editing ? '1px dashed rgba(0,35,75,.32)' : undefined, outlineOffset: 2,
+              }}
+            >
+              <FurnitureView f={f} />
+              {sel && <div onPointerDown={(e) => down(e, f, 'resize')} onPointerMove={move} onPointerUp={up} style={handle} />}
+            </div>
+            {sel && (
+              <div style={{ position: 'absolute', left: f.x, top: Math.max(0, f.y - 32), zIndex: 20, display: 'flex', gap: 5 }}>
+                <div onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); rotate(f.id); }} style={tbBtn} title="Girar 45°"><RotateCw size={15} color="#00234B" /></div>
+                <div onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); remove(f.id); }} style={tbBtn} title="Remover"><X size={15} color="#B4342B" /></div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 };

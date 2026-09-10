@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Boxes, Search, Plus, Map as MapIcon, Pencil, Check, X, RotateCw, Trash2 } from 'lucide-react';
+import { Boxes, Search, Plus, Map as MapIcon, Pencil, Check, X } from 'lucide-react';
 import StationSheet from '@/components/inventory-map/StationSheet';
 import IllustratedMap from '@/components/inventory-map/IllustratedMap';
 import MapSelector, { isSelectableMap, spaceAncestors } from '@/components/inventory-map/MapSelector';
@@ -20,14 +20,15 @@ const emptyStation = { code: '', name: '', status: 'ACTIVE' as StationStatus };
 const defaultPos = (idx: number) => ({ x: 30 + (idx % 4) * 230, y: 60 + Math.floor(idx / 4) * 210 });
 
 // Paleta de mobília (só visual, atrás das estações).
+// Tamanhos default proporcionais à escala do mapa (mesa/estação ~170px).
 const FURN_PALETTE: { kind: FurnitureKind; label: string; w: number; h: number }[] = [
-  { kind: 'wall', label: 'Parede', w: 200, h: 8 },
-  { kind: 'partition', label: 'Divisória', w: 160, h: 6 },
-  { kind: 'cabinet', label: 'Armário', w: 170, h: 52 },
+  { kind: 'wall', label: 'Parede', w: 240, h: 12 },
+  { kind: 'partition', label: 'Divisória', w: 180, h: 10 },
+  { kind: 'cabinet', label: 'Armário', w: 150, h: 46 },
   { kind: 'meeting', label: 'Mesa reunião', w: 200, h: 130 },
-  { kind: 'printer', label: 'Impressora', w: 64, h: 58 },
-  { kind: 'mfp', label: 'Multifuncional', w: 84, h: 76 },
-  { kind: 'phone', label: 'Telefone', w: 44, h: 40 },
+  { kind: 'printer', label: 'Impressora', w: 46, h: 40 },
+  { kind: 'mfp', label: 'Multifuncional', w: 60, h: 56 },
+  { kind: 'phone', label: 'Telefone', w: 30, h: 28 },
   { kind: 'label', label: 'Rótulo', w: 140, h: 26 },
 ];
 const newFurnId = () => `f-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -105,11 +106,9 @@ const InventoryMapPage = () => {
   const addFurniture = (kind: FurnitureKind) => {
     const spec = FURN_PALETTE.find((p) => p.kind === kind)!;
     const id = newFurnId();
-    setFurniture((f) => [...f, { id, kind, x: 60, y: 60, width: spec.w, height: spec.h, rotation: 0, label: kind === 'label' ? 'SALA' : undefined }]);
+    setFurniture((f) => [...f, { id, kind, x: 40, y: 40, width: spec.w, height: spec.h, rotation: 0, label: kind === 'label' ? 'SALA' : undefined }]);
     setSelectedFurn(id);
   };
-  const rotateFurn = () => setFurniture((f) => f.map((it) => (it.id === selectedFurn ? { ...it, rotation: (it.rotation + 15) % 360 } : it)));
-  const removeFurn = () => { setFurniture((f) => f.filter((it) => it.id !== selectedFurn)); setSelectedFurn(null); };
   const setFurnLabel = (text: string) => setFurniture((f) => f.map((it) => (it.id === selectedFurn ? { ...it, label: text } : it)));
   const selectedFurnItem = furniture.find((it) => it.id === selectedFurn) || null;
 
@@ -187,14 +186,8 @@ const InventoryMapPage = () => {
               {FURN_PALETTE.map((p) => (
                 <Button key={p.kind} size="sm" variant="outline" className="h-8 px-2 text-[12px]" onClick={() => addFurniture(p.kind)}>+ {p.label}</Button>
               ))}
-              {selectedFurnItem && (
-                <div className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/[0.05] px-2 py-1">
-                  {selectedFurnItem.kind === 'label' && (
-                    <Input value={selectedFurnItem.label ?? ''} onChange={(e) => setFurnLabel(e.target.value)} placeholder="Nome da sala" className="h-7 w-32 text-xs" />
-                  )}
-                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={rotateFurn} title="Girar 15°"><RotateCw className="h-3.5 w-3.5" /></Button>
-                  <Button size="sm" variant="outline" className="h-7 px-2 text-destructive hover:text-destructive" onClick={removeFurn} title="Remover"><Trash2 className="h-3.5 w-3.5" /></Button>
-                </div>
+              {selectedFurnItem?.kind === 'label' && (
+                <Input value={selectedFurnItem.label ?? ''} onChange={(e) => setFurnLabel(e.target.value)} placeholder="Nome da sala" className="h-8 w-36 text-xs" />
               )}
               <Button size="sm" variant="outline" className="ml-auto h-9" onClick={cancelEdit}><X className="mr-1.5 h-3.5 w-3.5" />Cancelar</Button>
               <Button size="sm" className="h-9" onClick={saveLayout} disabled={savingLayout}><Check className="mr-1.5 h-3.5 w-3.5" />Salvar planta</Button>

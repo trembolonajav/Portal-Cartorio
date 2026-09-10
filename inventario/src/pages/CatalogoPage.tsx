@@ -21,6 +21,7 @@ const MOBILIARIO = [
   { img: 'mesa-canto-chanfrada.png', name: 'Mesa de canto', meta: 'chanfrada' },
   { img: 'mesa-l.png', name: 'Mesa em L', meta: '1,60 × 1,40 m' },
   { img: 'cadeira-giratoria.png', name: 'Cadeira giratória', meta: 'com braços' },
+  { img: 'armario-topo.svg', name: 'Armário (visão superior)', meta: 'para a planta' },
   { img: 'armario-2portas-pastas.png', name: 'Armário de pastas', meta: '2 portas + nicho' },
 ];
 const EQUIPAMENTOS = [

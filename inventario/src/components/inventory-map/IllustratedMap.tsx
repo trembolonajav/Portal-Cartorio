@@ -117,7 +117,7 @@ const Workstation = ({ assets, state }: { assets: Asset[]; state: TileState }) =
   );
 };
 
-const Cabinet = () => <img src={P('armario-2portas-pastas.png')} alt="" style={{ width: 170, display: 'block', pointerEvents: 'none' }} />;
+const Cabinet = () => <img src={P('armario-topo.svg')} alt="" style={{ width: 170, display: 'block', pointerEvents: 'none' }} />;
 const EmptySlot = () => <div style={{ width: 170, height: 94, border: '2px dashed #B9B3A9', borderRadius: 6, background: 'rgba(255,255,255,.45)' }} />;
 
 // Rótulo + móvel girado — compartilhado pela planta e pela visão geral.

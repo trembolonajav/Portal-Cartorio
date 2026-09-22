@@ -61,6 +61,8 @@
       JAVA_OPTS: -Xms128m -Xmx512m
     ports:
       - "8083:8080"
+    volumes:
+      - inventory_storage:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,5 +103,6 @@
 
 volumes:
   postgres_data:
+  inventory_storage:
   caddy_data:
   caddy_config:

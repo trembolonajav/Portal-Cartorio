@@ -5,6 +5,8 @@ import com.assetguardian.backend.api.dto.AssetDisposalCreateRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalDocumentResponse;
 import com.assetguardian.backend.api.dto.AssetDisposalEventResponse;
 import com.assetguardian.backend.api.dto.AssetDisposalItemResponse;
+import com.assetguardian.backend.api.dto.AssetDisposalMaterialRequest;
+import com.assetguardian.backend.api.dto.AssetDisposalMaterialResponse;
 import com.assetguardian.backend.api.dto.AssetDisposalResponse;
 import com.assetguardian.backend.domain.Asset;
 import com.assetguardian.backend.domain.AssetAssignment;
@@ -13,6 +15,7 @@ import com.assetguardian.backend.domain.AssetDisposalDocument;
 import com.assetguardian.backend.domain.AssetDisposalDocumentType;
 import com.assetguardian.backend.domain.AssetDisposalEvent;
 import com.assetguardian.backend.domain.AssetDisposalItem;
+import com.assetguardian.backend.domain.AssetDisposalMaterial;
 import com.assetguardian.backend.domain.AssetDisposalStatus;
 import com.assetguardian.backend.domain.AssetMovement;
 import com.assetguardian.backend.domain.AssetStatus;
@@ -26,6 +29,7 @@ import com.assetguardian.backend.repository.AssetAssignmentRepository;
 import com.assetguardian.backend.repository.AssetDisposalDocumentRepository;
 import com.assetguardian.backend.repository.AssetDisposalEventRepository;
 import com.assetguardian.backend.repository.AssetDisposalItemRepository;
+import com.assetguardian.backend.repository.AssetDisposalMaterialRepository;
 import com.assetguardian.backend.repository.AssetDisposalRepository;
 import com.assetguardian.backend.repository.AssetMovementRepository;
 import com.assetguardian.backend.repository.AssetRepository;
@@ -59,6 +63,7 @@ public class AssetDisposalService {
 
     private final AssetDisposalRepository disposalRepository;
     private final AssetDisposalItemRepository itemRepository;
+    private final AssetDisposalMaterialRepository materialRepository;
     private final AssetDisposalDocumentRepository documentRepository;
     private final AssetDisposalEventRepository eventRepository;
     private final AssetRepository assetRepository;
@@ -77,6 +82,9 @@ public class AssetDisposalService {
     }
 
     public AssetDisposalResponse create(AssetDisposalCreateRequest request) {
+        if (request.assetIds().isEmpty() && request.materials().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inclua ao menos um patrimonio ou material sem patrimonio");
+        }
         AssetDisposal disposal = new AssetDisposal();
         disposal.setNumber(nextNumber());
         disposal.setStatus(AssetDisposalStatus.DRAFT);
@@ -92,6 +100,9 @@ public class AssetDisposalService {
         for (Long assetId : request.assetIds()) {
             addSnapshot(saved, requireAsset(assetId));
         }
+        for (AssetDisposalMaterialRequest material : request.materials()) {
+            addMaterial(saved, material);
+        }
         event(saved, "CREATED", "Baixa patrimonial " + saved.getNumber() + " criada", saved.getRequestedBy());
         return toResponse(saved, true);
     }
@@ -99,7 +110,8 @@ public class AssetDisposalService {
     public AssetDisposalResponse generateTerm(Long id, String username) {
         AssetDisposal disposal = requireDisposal(id);
         ensureStatus(disposal, AssetDisposalStatus.DRAFT);
-        if (itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id).isEmpty()) {
+        if (itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id).isEmpty()
+            && materialRepository.findByDisposalIdOrderByIdAsc(id).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inclua ao menos um patrimonio na baixa");
         }
         disposal.setStatus(AssetDisposalStatus.WAITING_SIGNATURE);
@@ -111,7 +123,11 @@ public class AssetDisposalService {
     public String termHtml(Long id) {
         AssetDisposal disposal = requireDisposal(id);
         List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id);
-        return fullTermHtml(disposal, items);
+        List<AssetDisposalMaterial> materials = materialRepository.findByDisposalIdOrderByIdAsc(id);
+        List<AssetDisposalDocument> photos = documentRepository.findByDisposalIdOrderByUploadedAtDesc(id).stream()
+            .filter(document -> document.getType() == AssetDisposalDocumentType.PHOTO)
+            .toList();
+        return fullTermHtml(disposal, items, materials, photos);
     }
 
     public byte[] termPdf(Long id) {
@@ -121,7 +137,8 @@ public class AssetDisposalService {
     public String signatureSheetHtml(Long id) {
         AssetDisposal disposal = requireDisposal(id);
         List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id);
-        return signatureSheetHtml(disposal, items);
+        List<AssetDisposalMaterial> materials = materialRepository.findByDisposalIdOrderByIdAsc(id);
+        return signatureSheetHtml(disposal, items, materials);
     }
 
     public byte[] signatureSheetPdf(Long id) {
@@ -134,29 +151,39 @@ public class AssetDisposalService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Arquivo obrigatorio");
         }
-        String originalName = file.getOriginalFilename() == null ? "termo-assinado.pdf" : file.getOriginalFilename();
-        String safeName = safeFileName(originalName);
-        Path target = Path.of("storage", "asset-disposals", disposal.getNumber(), safeName);
-        try {
-            Files.createDirectories(target.getParent());
-            file.transferTo(target);
-        } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Falha ao salvar documento assinado");
-        }
-
-        AssetDisposalDocument document = new AssetDisposalDocument();
-        document.setDisposal(disposal);
-        document.setType(AssetDisposalDocumentType.SIGNED_TERM);
-        document.setFileName(originalName);
-        document.setFilePath(target.toString());
-        document.setMimeType(file.getContentType());
-        document.setUploadedBy(blankToNull(username));
-        document.setUploadedAt(LocalDateTime.now());
-        documentRepository.save(document);
+        AssetDisposalDocument document = storeDocument(disposal, AssetDisposalDocumentType.SIGNED_TERM, file, username);
 
         disposal.setSignedDocumentUploadedAt(LocalDateTime.now());
-        event(disposal, "SIGNED_TERM_UPLOADED", "Termo assinado anexado: " + originalName, username);
+        event(disposal, "SIGNED_TERM_UPLOADED", "Termo assinado anexado: " + document.getFileName(), username);
         return toResponse(disposal, true);
+    }
+
+    public AssetDisposalResponse uploadDocument(Long id, AssetDisposalDocumentType type, MultipartFile file, String username) {
+        AssetDisposal disposal = requireDisposal(id);
+        if (type == AssetDisposalDocumentType.SIGNED_TERM) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use o envio de termo assinado");
+        }
+        if (disposal.getStatus() == AssetDisposalStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nao e possivel anexar documento a baixa cancelada");
+        }
+        AssetDisposalDocument document = storeDocument(disposal, type, file, username);
+        event(disposal, "DOCUMENT_UPLOADED", "Documento anexado: " + document.getFileName() + " (" + type.name() + ")", username);
+        return toResponse(disposal, true);
+    }
+
+    @Transactional(readOnly = true)
+    public StoredDocument getDocument(Long disposalId, Long documentId) {
+        AssetDisposalDocument document = documentRepository.findById(documentId)
+            .filter(item -> item.getDisposal().getId().equals(disposalId))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento nao encontrado"));
+        Path path = Path.of(document.getFilePath()).normalize();
+        if (!Files.exists(path)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo do documento nao encontrado");
+        }
+        return new StoredDocument(path, document.getFileName(), document.getMimeType());
+    }
+
+    public record StoredDocument(Path path, String fileName, String mimeType) {
     }
 
     public AssetDisposalResponse finalizeDisposal(Long id, String username) {
@@ -202,14 +229,24 @@ public class AssetDisposalService {
         return toResponse(disposal, true);
     }
 
-    private String fullTermHtml(AssetDisposal disposal, List<AssetDisposalItem> items) {
+    private String fullTermHtml(
+        AssetDisposal disposal,
+        List<AssetDisposalItem> items,
+        List<AssetDisposalMaterial> materials,
+        List<AssetDisposalDocument> photos
+    ) {
         String date = formatDate(disposal.getAuthorizationDate());
         String termNumber = termNumber(disposal);
-        String dominantCategory = dominantCategory(items);
-        String riskLabel = dataRiskLabel(items);
-        String riskDescription = dataRiskDescription(items);
-        String categoryDescription = categoryDescription(items, dominantCategory);
-        String disposalType = items.size() > 1 ? "Baixa patrimonial em lote" : "Baixa patrimonial individual";
+        String dominantCategory = items.isEmpty() ? materials.getFirst().getCategory() : dominantCategory(items);
+        boolean materialDataRisk = materials.stream().anyMatch(AssetDisposalMaterial::isContainsSensitiveData);
+        String riskLabel = materialDataRisk ? "Exige verificacao" : dataRiskLabel(items);
+        String riskDescription = materialDataRisk
+            ? "O processo possui material marcado com dados, credenciais ou licencas sensiveis. Exigir descaracterizacao ou destruicao segura antes da destinacao."
+            : dataRiskDescription(items);
+        String categoryDescription = items.isEmpty() ? dominantCategory : categoryDescription(items, dominantCategory);
+        int materialUnits = materials.stream().mapToInt(AssetDisposalMaterial::getQuantity).sum();
+        int totalUnits = items.size() + materialUnits;
+        String disposalType = totalUnits > 1 ? "Baixa patrimonial em lote" : "Baixa patrimonial individual";
         String reasonTechnical = reasonTechnicalLabel(disposal);
         StringBuilder html = new StringBuilder();
         html.append(documentStart("Termo de Baixa Patrimonial"));
@@ -218,19 +255,21 @@ public class AssetDisposalService {
                 <div class="cover-content">
                   <img class="cover-logo" src=\"""").append(html(brandLogoDataUri())).append("""
                   " alt="" />
-                  <div class="cover-brand">CARTORIO INDIO ARTIAGA</div>
-                  <div class="cover-notary">4o Tabelionato de Notas</div>
+                  <div class="cover-brand">CARTÓRIO ÍNDIO ARTIAGA</div>
+                  <div class="cover-notary">4º Tabelionato de Notas</div>
                   <div class="cover-line"></div>
-                  <div class="cover-kicker">MODELO REUTILIZAVEL</div>
+                  <div class="cover-kicker">CONTROLE PATRIMONIAL</div>
                   <h1>TERMO DE BAIXA PATRIMONIAL</h1>
-                  <p class="cover-subtitle">Baixa patrimonial - documento gerado pelo sistema</p>
+                  <p class="cover-subtitle">Processo formal de baixa, destinação e preservação do histórico dos itens</p>
                   <table class="cover-table">
             """);
         coverRow(html, "No do termo", termNumber);
         coverRow(html, "Data de emissao", date);
         coverRow(html, "Unidade", "Cartorio Indio Artiaga - 4o Tabelionato de Notas");
         coverRow(html, "Processo interno", disposal.getNumber());
-        coverRow(html, "Quantidade de bens", String.valueOf(items.size()));
+        coverRow(html, "Patrimonios", String.valueOf(items.size()));
+        coverRow(html, "Materiais sem patrimonio", String.valueOf(materialUnits));
+        coverRow(html, "Total de itens", String.valueOf(totalUnits));
         coverRow(html, "Status documental", statusLabel(disposal.getStatus()));
         html.append("""
                   </table>
@@ -244,7 +283,7 @@ public class AssetDisposalService {
                 <div class="summary-grid">
             """);
         stat(html, "Categoria", dominantCategory);
-        stat(html, "Quantidade", String.valueOf(items.size()));
+        stat(html, "Quantidade", String.valueOf(totalUnits));
         stat(html, "Motivo", reasonTechnical);
         stat(html, "Risco de dados", riskLabel);
         html.append("""
@@ -295,9 +334,9 @@ public class AssetDisposalService {
                 <p>Esta etapa classifica se os bens possuem risco de exposicao de dados. Perifericos simples normalmente nao possuem armazenamento interno; computadores, notebooks, servidores, HDs, SSDs e midias exigem verificacao tecnica antes da destinacao.</p>
                 <table class="info-table">
             """);
-        row(html, "Possui HD/SSD ou midia de armazenamento?", storageRisk(items) ? "Verificar antes da destinacao" : "Nao identificado nos bens selecionados");
-        row(html, "Armazena documentos, imagens ou arquivos internos?", storageRisk(items) ? "Possivel - exige validacao tecnica" : "Nao aplicavel para a categoria predominante");
-        row(html, "Exige limpeza logica, formatacao segura ou destruicao de midia?", storageRisk(items) ? "Sim, antes da baixa final" : "Nao se aplica");
+        row(html, "Possui HD/SSD, midia, credencial ou licenca?", storageRisk(items) || materialDataRisk ? "Verificar antes da destinacao" : "Nao identificado nos itens selecionados");
+        row(html, "Armazena documentos, imagens, chaves ou configuracoes?", storageRisk(items) || materialDataRisk ? "Possivel - exige validacao tecnica" : "Nao aplicavel para a categoria predominante");
+        row(html, "Exige limpeza logica, descaracterizacao ou destruicao segura?", storageRisk(items) || materialDataRisk ? "Sim, antes da baixa final" : "Nao se aplica");
         row(html, "Risco de exposicao de dados pessoais ou documentos internos?", riskDescription);
         html.append("""
                 </table>
@@ -338,6 +377,54 @@ public class AssetDisposalService {
                 </table>
                 <p class="muted">Nota de conferencia: a relacao acima foi preenchida diretamente a partir do inventario. Conferir fisicamente os numeros patrimoniais e as etiquetas antes da assinatura.</p>
               </section>
+            """);
+        if (!materials.isEmpty()) {
+            html.append("""
+              <section class="page">
+                <h2>4.1. Materiais sem numero patrimonial</h2>
+                <p class="muted">Materiais, acessorios, midias e residuos incluidos no mesmo processo sem criacao de patrimonio ficticio.</p>
+                <table class="assets-table">
+                  <thead><tr><th>No</th><th>Categoria</th><th>Descricao</th><th>Quantidade</th><th>Unidade</th><th>Dados/credenciais</th><th>Observacoes</th><th>Destino</th></tr></thead>
+                  <tbody>
+            """);
+            for (int index = 0; index < materials.size(); index++) {
+                AssetDisposalMaterial material = materials.get(index);
+                html.append("<tr><td>").append(index + 1)
+                    .append("</td><td>").append(html(material.getCategory()))
+                    .append("</td><td>").append(html(material.getDescription()))
+                    .append("</td><td>").append(material.getQuantity())
+                    .append("</td><td>").append(html(material.getUnit()))
+                    .append("</td><td>").append(material.isContainsSensitiveData() ? "Exige destruicao segura" : "Nao identificado")
+                    .append("</td><td>").append(html(material.getNotes()))
+                    .append("</td><td>").append(html(disposal.getDestination()))
+                    .append("</td></tr>");
+            }
+            html.append("""
+                  </tbody>
+                </table>
+              </section>
+            """);
+        }
+        if (!photos.isEmpty()) {
+            html.append("""
+              <section class="page">
+                <h2>4.2. Registro fotografico</h2>
+                <p class="muted">Imagens anexadas ao processo no sistema e incorporadas automaticamente ao termo.</p>
+                <div class="photo-grid">
+            """);
+            for (AssetDisposalDocument photo : photos) {
+                String dataUri = documentImageDataUri(photo);
+                if (!dataUri.isBlank()) {
+                    html.append("<div class=\"photo-card\"><img src=\"").append(html(dataUri))
+                        .append("\" alt=\"\"/><div>").append(html(photo.getFileName())).append("</div></div>");
+                }
+            }
+            html.append("""
+                </div>
+              </section>
+            """);
+        }
+        html.append("""
 
               <section class="page">
                 <h2>5. Fluxo de baixa no sistema</h2>
@@ -373,7 +460,7 @@ public class AssetDisposalService {
             """);
         row(html, "Preenchidos automaticamente pelo sistema", "Numero de patrimonio; descricao; categoria; marca; modelo; numero de serie; setor/localizacao; responsavel; status cadastrado; origem do cadastro; historico; data de criacao e ultima movimentacao quando disponiveis.");
         row(html, "Confirmados pelo usuario", "Motivo da baixa; destinacao; responsavel pela conferencia; aprovador; observacoes; anexos e data prevista de descarte quando aplicavel.");
-        row(html, "Regras por categoria", storageRisk(items) ? "Computador/notebook/servidor/HD/SSD: exigir verificacao de midia, limpeza de dados ou laudo tecnico." : "Categoria predominante sem armazenamento interno: seguranca da informacao classificada como N/A, mantendo registro da avaliacao.");
+        row(html, "Regras por categoria", storageRisk(items) || materialDataRisk ? "Computador/notebook/servidor/HD/SSD/midia/licenca: exigir verificacao, limpeza de dados, descaracterizacao ou laudo tecnico." : "Categoria predominante sem armazenamento interno: seguranca da informacao classificada como N/A, mantendo registro da avaliacao.");
         row(html, "Validacoes obrigatorias", "Nao permitir exclusao definitiva do patrimonio; exigir historico; gerar codigo do processo; vincular PDF; manter trilha de auditoria.");
         html.append("""
                 </table>
@@ -389,7 +476,7 @@ public class AssetDisposalService {
                 </table>
               </section>
             """);
-        if (items.size() <= 10) {
+        if (totalUnits <= 10) {
             html.append("""
               <section class="section signature-section">
                 <h2>7. Aprovacao e assinaturas</h2>
@@ -414,7 +501,7 @@ public class AssetDisposalService {
         return html.toString();
     }
 
-    private String signatureSheetHtml(AssetDisposal disposal, List<AssetDisposalItem> items) {
+    private String signatureSheetHtml(AssetDisposal disposal, List<AssetDisposalItem> items, List<AssetDisposalMaterial> materials) {
         StringBuilder html = new StringBuilder();
         html.append(documentStart("Folha de Assinatura - Baixa Patrimonial"));
         html.append("""
@@ -428,7 +515,9 @@ public class AssetDisposalService {
         meta(html, "Data", formatDate(disposal.getAuthorizationDate()));
         meta(html, "Motivo", reasonLabel(disposal));
         meta(html, "Destino", disposal.getDestination());
-        meta(html, "Quantidade de bens", String.valueOf(items.size()));
+        int materialUnits = materials.stream().mapToInt(AssetDisposalMaterial::getQuantity).sum();
+        meta(html, "Patrimonios", String.valueOf(items.size()));
+        meta(html, "Materiais sem patrimonio", String.valueOf(materialUnits));
         meta(html, "Autorizador", disposal.getAuthorizedByName());
         html.append("""
                 </div>
@@ -436,23 +525,44 @@ public class AssetDisposalService {
                   <p>Declaro ciencia e aprovacao da baixa patrimonial indicada acima, referente aos bens relacionados no termo completo gerado pelo Sistema de Inventario Patrimonial.</p>
                   <p>O termo completo permanece armazenado digitalmente no sistema, com relacao integral dos patrimonios, snapshots dos dados cadastrais, justificativa, historico e documentos anexos.</p>
                 </div>
-                <h2>Resumo dos patrimonios</h2>
+            """);
+        if (!items.isEmpty()) {
+            html.append("""
+                <h2>Resumo dos patrimônios</h2>
                 <table>
-                  <thead><tr><th>No</th><th>Patrimonio</th><th>Categoria</th><th>Descricao</th><th>Local</th></tr></thead>
+                  <thead><tr><th>Nº</th><th>Patrimônio</th><th>Categoria</th><th>Descrição</th><th>Local</th></tr></thead>
                   <tbody>
             """);
-        for (int index = 0; index < items.size(); index++) {
-            AssetDisposalItem item = items.get(index);
-            html.append("<tr><td>").append(index + 1).append("</td><td>").append(html(item.getAssetCodeSnapshot()))
-                .append("</td><td>").append(html(item.getCategorySnapshot()))
-                .append("</td><td>").append(html(item.getDescriptionSnapshot()))
-                .append("</td><td>").append(html(item.getStationSnapshot()))
-                .append("</td></tr>");
+            for (int index = 0; index < items.size(); index++) {
+                AssetDisposalItem item = items.get(index);
+                html.append("<tr><td>").append(index + 1).append("</td><td>").append(html(item.getAssetCodeSnapshot()))
+                    .append("</td><td>").append(html(item.getCategorySnapshot()))
+                    .append("</td><td>").append(html(item.getDescriptionSnapshot()))
+                    .append("</td><td>").append(html(item.getStationSnapshot()))
+                    .append("</td></tr>");
+            }
+            html.append("</tbody></table>");
+        }
+        if (!materials.isEmpty()) {
+            html.append("""
+                <h2>Resumo dos materiais sem patrimônio</h2>
+                <table>
+                  <thead><tr><th>Nº</th><th>Categoria</th><th>Descrição</th><th>Quantidade</th><th>Cautela</th></tr></thead>
+                  <tbody>
+            """);
+            for (int index = 0; index < materials.size(); index++) {
+                AssetDisposalMaterial material = materials.get(index);
+                html.append("<tr><td>").append(index + 1)
+                    .append("</td><td>").append(html(material.getCategory()))
+                    .append("</td><td>").append(html(material.getDescription()))
+                    .append("</td><td>").append(material.getQuantity()).append(" ").append(html(material.getUnit()))
+                    .append("</td><td>").append(material.isContainsSensitiveData() ? "Exige destruição segura" : "Sem cautela especial")
+                    .append("</td></tr>");
+            }
+            html.append("</tbody></table>");
         }
         html.append("""
-                  </tbody>
-                </table>
-                <p class="muted">Caso a lista seja extensa, esta folha assina e referencia o termo completo digital da baixa, evitando impressao desnecessaria de todas as paginas.</p>
+                <p class="muted">Caso a lista seja extensa, esta folha assina e referencia o termo completo digital da baixa, evitando impressão desnecessária de todas as páginas.</p>
                 <div class="signatures four">
                   <div class="signature">Responsavel pela conferencia<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
                   <div class="signature">Responsavel de TI / Inventario<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
@@ -496,9 +606,54 @@ public class AssetDisposalService {
         event(disposal, "ITEM_ADDED", "Patrimonio " + asset.getAssetCode() + " adicionado a baixa", disposal.getRequestedBy());
     }
 
+    private void addMaterial(AssetDisposal disposal, AssetDisposalMaterialRequest request) {
+        AssetDisposalMaterial material = new AssetDisposalMaterial();
+        material.setDisposal(disposal);
+        material.setCategory(request.category().trim());
+        material.setDescription(request.description().trim());
+        material.setQuantity(request.quantity());
+        material.setUnit(request.unit().trim());
+        material.setNotes(blankToNull(request.notes()));
+        material.setContainsSensitiveData(request.containsSensitiveData());
+        materialRepository.save(material);
+        event(disposal, "MATERIAL_ADDED", request.quantity() + " " + request.unit() + " de " + request.description() + " adicionado(s) a baixa", disposal.getRequestedBy());
+    }
+
+    private AssetDisposalDocument storeDocument(
+        AssetDisposal disposal,
+        AssetDisposalDocumentType type,
+        MultipartFile file,
+        String username
+    ) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Arquivo obrigatorio");
+        }
+        String originalName = file.getOriginalFilename() == null ? "documento" : file.getOriginalFilename();
+        String uniqueName = System.currentTimeMillis() + "-" + safeFileName(originalName);
+        Path target = Path.of("storage", "asset-disposals", disposal.getNumber(), uniqueName);
+        try {
+            Files.createDirectories(target.getParent());
+            file.transferTo(target);
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Falha ao salvar documento");
+        }
+
+        AssetDisposalDocument document = new AssetDisposalDocument();
+        document.setDisposal(disposal);
+        document.setType(type);
+        document.setFileName(originalName);
+        document.setFilePath(target.toString());
+        document.setMimeType(file.getContentType());
+        document.setUploadedBy(blankToNull(username));
+        document.setUploadedAt(LocalDateTime.now());
+        return documentRepository.save(document);
+    }
+
     private AssetDisposalResponse toResponse(AssetDisposal disposal, boolean includeDetails) {
         List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(disposal.getId());
+        List<AssetDisposalMaterial> materials = materialRepository.findByDisposalIdOrderByIdAsc(disposal.getId());
         List<AssetDisposalItemResponse> itemResponses = includeDetails ? items.stream().map(this::toItemResponse).toList() : List.of();
+        List<AssetDisposalMaterialResponse> materialResponses = includeDetails ? materials.stream().map(this::toMaterialResponse).toList() : List.of();
         List<AssetDisposalDocumentResponse> documentResponses = includeDetails ? documentRepository.findByDisposalIdOrderByUploadedAtDesc(disposal.getId()).stream().map(this::toDocumentResponse).toList() : List.of();
         List<AssetDisposalEventResponse> eventResponses = includeDetails ? eventRepository.findByDisposalIdOrderByCreatedAtDesc(disposal.getId()).stream().map(this::toEventResponse).toList() : List.of();
         return new AssetDisposalResponse(
@@ -518,8 +673,11 @@ public class AssetDisposalService {
             disposal.getFinalizedAt(),
             disposal.getCancelledAt(),
             disposal.getCancelReason(),
+            items.size() + materials.stream().mapToInt(AssetDisposalMaterial::getQuantity).sum(),
             items.size(),
+            materials.stream().mapToInt(AssetDisposalMaterial::getQuantity).sum(),
             itemResponses,
+            materialResponses,
             documentResponses,
             eventResponses
         );
@@ -540,6 +698,18 @@ public class AssetDisposalService {
             item.getResponsibleSnapshot(),
             item.getStatusSnapshot(),
             item.getOriginSnapshot()
+        );
+    }
+
+    private AssetDisposalMaterialResponse toMaterialResponse(AssetDisposalMaterial material) {
+        return new AssetDisposalMaterialResponse(
+            material.getId(),
+            material.getCategory(),
+            material.getDescription(),
+            material.getQuantity(),
+            material.getUnit(),
+            material.getNotes(),
+            material.isContainsSensitiveData()
         );
     }
 
@@ -615,6 +785,10 @@ public class AssetDisposalService {
                 .info-table th { width: 32%; background: #f2f5f9; color: #061a38; }
                 .assets-table { font-size: 8.6px; }
                 .assets-table th, .assets-table td { padding: 4px; }
+                .photo-grid { margin-top: 10px; }
+                .photo-card { display: inline-block; vertical-align: top; width: 48%; margin: 0 1% 12px 0; border: 1px solid #d8dee8; padding: 6px; text-align: center; page-break-inside: avoid; }
+                .photo-card img { display: block; width: 100%; height: 180px; object-fit: contain; margin-bottom: 5px; }
+                .photo-card div { color: #657286; font-size: 9px; overflow-wrap: anywhere; }
                 .signatures { margin-top: 36px; page-break-inside: avoid; break-inside: avoid; }
                 .signature { display: inline-block; vertical-align: top; width: 47%; border-top: 1px solid #061a38; padding-top: 7px; min-height: 72px; font-size: 10.5px; line-height: 1.6; margin: 0 2% 28px 0; }
               </style>
@@ -686,6 +860,21 @@ public class AssetDisposalService {
                 return "";
             }
             return "data:image/png;base64," + Base64.getEncoder().encodeToString(stream.readAllBytes());
+        } catch (IOException ex) {
+            return "";
+        }
+    }
+
+    private String documentImageDataUri(AssetDisposalDocument document) {
+        if (document.getFilePath() == null || document.getMimeType() == null || !document.getMimeType().startsWith("image/")) {
+            return "";
+        }
+        try {
+            Path path = Path.of(document.getFilePath());
+            if (!Files.exists(path)) {
+                return "";
+            }
+            return "data:" + document.getMimeType() + ";base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(path));
         } catch (IOException ex) {
             return "";
         }
@@ -846,8 +1035,12 @@ public class AssetDisposalService {
 
     private String nextNumber() {
         String prefix = "BP-" + Year.now().getValue() + "-";
-        long next = disposalRepository.countByNumberStartingWith(prefix) + 1;
-        return prefix + String.format("%04d", next);
+        int next = 1;
+        String candidate;
+        do {
+            candidate = prefix + String.format("%04d", next++);
+        } while (disposalRepository.existsByNumber(candidate));
+        return candidate;
     }
 
     private AssetDisposal requireDisposal(Long id) {

@@ -1,5 +1,6 @@
 package com.assetguardian.backend.api;
 
+import com.assetguardian.backend.api.dto.HistoryEventResponse;
 import com.assetguardian.backend.api.dto.PhysicalCheckRequest;
 import com.assetguardian.backend.api.dto.PhysicalCheckResponse;
 import com.assetguardian.backend.service.PhysicalCheckService;
@@ -32,6 +33,16 @@ public class PhysicalCheckController {
     @GetMapping("/assets/{id}/checks")
     public List<PhysicalCheckResponse> history(@PathVariable Long id) {
         return physicalCheckService.history(id);
+    }
+
+    @GetMapping("/stations/{id}/checks")
+    public List<PhysicalCheckResponse> stationHistory(@PathVariable Long id) {
+        return physicalCheckService.stationHistory(id);
+    }
+
+    @GetMapping("/stations/{id}/conference-finalizations")
+    public List<HistoryEventResponse> finalizations(@PathVariable Long id) {
+        return physicalCheckService.finalizations(id);
     }
 
     @PostMapping("/stations/{id}/finalize-conference")

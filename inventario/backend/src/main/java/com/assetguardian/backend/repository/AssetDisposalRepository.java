@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AssetDisposalRepository extends JpaRepository<AssetDisposal, Long> {
 
-    long countByNumberStartingWith(String prefix);
+    boolean existsByNumber(String number);
 
     List<AssetDisposal> findAllByOrderByCreatedAtDesc();
 }

@@ -14,6 +14,7 @@ import { useAuthStore } from '@/features/auth/store/useAuthStore';
 import { useInventoryMapStore } from '@/features/inventory-map/store/useInventoryMapStore';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { StationStatus } from '@/features/inventory-map/types/inventoryMap.types';
+import { ConferenceHistory, conferenceDate } from "@/components/ConferenceHistory";
 import { toast } from 'sonner';
 
 const assetIcons: Record<string, React.ReactNode> = {
@@ -242,6 +243,8 @@ const StationDrawer = ({ stationId, onClose }: StationDrawerProps) => {
             )}
           </TabsContent>
           <TabsContent value="history" className="flex-1 overflow-y-auto px-6 pb-4 mt-4">
+            {station.lastConferenceAt && <p className="mb-3 text-xs">Última finalização: {conferenceDate(station.lastConferenceAt)} · {station.lastConferenceBy}</p>}
+            <ConferenceHistory stationId={stationId} revision={assets} />
             {historyEntries.length === 0 ? (
               <div className="text-center py-8">
                 <History className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />

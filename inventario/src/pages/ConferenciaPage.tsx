@@ -1,3 +1,4 @@
+import { conferenceDate } from "@/components/ConferenceHistory";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ChevronRight, CheckCircle2, LogOut } from "lucide-react";
@@ -124,7 +125,10 @@ const ConferenciaPage = () => {
                             {emp?.fullName ?? (st.name && st.name !== st.code ? st.name : "sem responsável")}
                           </div>
                         </div>
-                        <span className="shrink-0 text-[12px] text-muted-foreground">{stat.checked}/{stat.total}</span>
+                        <div className="text-right text-[11px] text-muted-foreground">
+                          <div>{stat.checked}/{stat.total} conferidos · {stat.issues} pendências</div>
+                          {st.lastConferenceAt && <div>Finalizada em {conferenceDate(st.lastConferenceAt)}<br />por {st.lastConferenceBy}</div>}
+                        </div>
                         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                       </button>
                     </li>

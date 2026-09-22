@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import { inventoryApi } from '@/lib/inventory-api';
 import { getCurrentUsername } from '@/lib/auth';
 import type { Station, Person, Asset, AssetAssignment, Department, Employee, Space, CheckResult, DivergenceType, FurnitureItem, FurnitureKind } from '../types/inventoryMap.types';
@@ -441,14 +442,19 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 
   recordCheck: async (assetId, body) => {
     try {
-      await inventoryApi.recordCheck(assetId, {
+      const saved = await inventoryApi.recordCheck(assetId, {
         result: body.result,
         divergenceType: body.divergenceType ?? null,
         stationId: body.stationId ? Number(body.stationId) : null,
         registerMovement: body.registerMovement ?? false,
         note: body.note,
       });
-      await get().refreshAll();
+      set(state => ({ assets: state.assets.map(asset => asset.id === assetId ? {
+        ...asset, lastCheckAt: saved.checkedAt, lastCheckBy: saved.checkedBy, lastCheckResult: saved.result,
+      } : asset) }));
+      await get().refreshAll().catch(() => {
+        toast.warning('Conferência salva. Não foi possível atualizar o inventário; recarregue a tela para ver a localização atual.');
+      });
       return { ok: true };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : 'Erro ao registrar conferência' };
@@ -457,7 +463,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 
   finalizeConference: async (stationId) => {
     await inventoryApi.finalizeConference(stationId);
-    await get().refreshAll();
+    await get().refreshAll().catch(() => {
+      toast.warning('Finalização salva. Recarregue a tela para atualizar a data da estação.');
+    });
   },
 
   loadFurniture: async (spaceId) => {

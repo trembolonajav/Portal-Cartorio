@@ -1087,7 +1087,7 @@ function TicketDetail({
   );
 }
 
-type ReportKind = "tickets_detailed" | "tickets_by_responsible" | "employees" | "assets_by_responsible" | "assets_detailed_by_department" | "assets_without_responsible";
+type ReportKind = "tickets_detailed" | "tickets_by_responsible" | "employees" | "assets_complete" | "assets_by_responsible" | "assets_detailed_by_responsible" | "assets_detailed_by_department" | "assets_without_responsible";
 type ReportRow = Record<string, string | number | null>;
 
 interface InventoryAssetReport {
@@ -1108,10 +1108,12 @@ interface InventoryAssetReport {
 
 const REPORT_LABELS: Record<ReportKind, string> = {
   tickets_detailed: "Chamados detalhados",
-  assets_detailed_by_department: "Inventario detalhado por departamento",
   tickets_by_responsible: "Chamados por responsável",
   employees: "Funcionários",
-  assets_by_responsible: "Patrimônios por responsável",
+  assets_complete: "Inventário patrimonial completo",
+  assets_detailed_by_department: "Inventário detalhado por departamento",
+  assets_detailed_by_responsible: "Inventário detalhado por responsável",
+  assets_by_responsible: "Patrimônios por responsável (resumo)",
   assets_without_responsible: "Patrimônios sem responsável",
 };
 
@@ -1156,7 +1158,7 @@ function ReportsPage() {
     [tickets],
   );
 
-  const isInventoryReport = reportKind === "assets_by_responsible" || reportKind === "assets_detailed_by_department" || reportKind === "assets_without_responsible";
+  const isInventoryReport = reportKind === "assets_complete" || reportKind === "assets_by_responsible" || reportKind === "assets_detailed_by_responsible" || reportKind === "assets_detailed_by_department" || reportKind === "assets_without_responsible";
 
   const inventoryDepartments = useMemo(
     () => uniqueBy(assets.flatMap((asset) => asset.departmentId && asset.departmentName ? [{ id: asset.departmentId, name: asset.departmentName }] : []), "id"),
@@ -1185,6 +1187,20 @@ function ReportsPage() {
       return true;
     });
   }, [tickets, status, responsible, departmentId, dateFrom, dateTo]);
+
+  const filteredAssets = useMemo(() => assets.filter((asset) => {
+    if (departmentId !== "all" && asset.departmentId !== departmentId) return false;
+    if (responsible !== "all" && asset.employeeName !== responsible) return false;
+    return true;
+  }), [assets, departmentId, responsible]);
+
+  const inventorySummary = useMemo(() => ({
+    total: filteredAssets.length,
+    allocated: filteredAssets.filter((asset) => Boolean(asset.employeeName)).length,
+    withoutResponsible: filteredAssets.filter((asset) => !asset.employeeName).length,
+    departments: new Set(filteredAssets.flatMap((asset) => asset.departmentName ? [asset.departmentName] : [])).size,
+    locations: new Set(filteredAssets.flatMap((asset) => asset.stationName ? [asset.stationName] : [])).size,
+  }), [filteredAssets]);
 
   const rows = useMemo<ReportRow[]>(() => {
     if (reportKind === "tickets_detailed") {
@@ -1237,11 +1253,6 @@ function ReportsPage() {
         }));
     }
 
-    const filteredAssets = assets.filter((asset) => {
-      if (departmentId !== "all" && asset.departmentId !== departmentId) return false;
-      if (responsible !== "all" && asset.employeeName !== responsible) return false;
-      return true;
-    });
     const selectedAssets = filteredAssets.filter((asset) => reportKind === "assets_without_responsible" ? !asset.employeeName : true);
     const grouped = new Map<string, { responsavel: string; departamento: string; total: number }>();
     selectedAssets.forEach((asset) => {
@@ -1256,6 +1267,40 @@ function ReportsPage() {
         Departamento: item.departamento,
         Patrimônios: item.total,
       }));
+    }
+    if (reportKind === "assets_complete") {
+      return [...selectedAssets]
+        .sort((first, second) => `${first.departmentName ?? ""}${first.stationName ?? ""}${first.employeeName ?? ""}${first.assetCode}`.localeCompare(`${second.departmentName ?? ""}${second.stationName ?? ""}${second.employeeName ?? ""}${second.assetCode}`))
+        .map((asset) => ({
+          Patrimônio: asset.assetCode,
+          Equipamento: asset.assetType,
+          Descrição: asset.assetDescription,
+          Fabricante: asset.manufacturer ?? "",
+          Modelo: asset.model ?? "",
+          "Número de série": asset.serialNumber ?? "",
+          Status: asset.assetStatus,
+          Responsável: asset.employeeName ?? "Sem responsável",
+          Departamento: asset.departmentName ?? "Sem departamento",
+          Estação: asset.stationCode ?? "",
+          Localização: asset.stationName ?? "Sem localização",
+        }));
+    }
+    if (reportKind === "assets_detailed_by_responsible") {
+      return [...selectedAssets]
+        .sort((first, second) => `${first.employeeName ?? ""}${first.departmentName ?? ""}${first.assetCode}`.localeCompare(`${second.employeeName ?? ""}${second.departmentName ?? ""}${second.assetCode}`))
+        .map((asset) => ({
+          Responsável: asset.employeeName ?? "Sem responsável",
+          Departamento: asset.departmentName ?? "Sem departamento",
+          Patrimônio: asset.assetCode,
+          Tipo: asset.assetType,
+          Descrição: asset.assetDescription,
+          Fabricante: asset.manufacturer ?? "",
+          Modelo: asset.model ?? "",
+          "Número de série": asset.serialNumber ?? "",
+          Estação: asset.stationCode ?? "",
+          Local: asset.stationName ?? "",
+          Status: asset.assetStatus,
+        }));
     }
     if (reportKind === "assets_detailed_by_department") {
       return [...selectedAssets]
@@ -1283,39 +1328,64 @@ function ReportsPage() {
       Local: asset.stationName ?? "",
       Departamento: asset.departmentName ?? "",
     }));
-  }, [reportKind, filteredTickets, employees, assets, departmentId, responsible]);
+  }, [reportKind, filteredTickets, employees, filteredAssets, departmentId]);
 
   const columns = rows.length ? Object.keys(rows[0]) : [];
   const filename = REPORT_LABELS[reportKind].toLowerCase().replaceAll(" ", "-").normalize("NFD").replaceAll(/\p{M}/gu, "");
+  const inventorySummaryItems = [
+    { label: "Total de patrimônios", value: inventorySummary.total },
+    { label: "Com responsável", value: inventorySummary.allocated },
+    { label: "Sem responsável", value: inventorySummary.withoutResponsible },
+    { label: "Departamentos", value: inventorySummary.departments },
+    { label: "Localizações", value: inventorySummary.locations },
+  ];
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr_0.9fr_0.9fr_0.75fr_0.75fr_auto_auto]">
+        <div className={`grid gap-4 ${isInventoryReport ? "xl:grid-cols-[1.6fr_1fr_1fr_auto_auto_auto]" : "xl:grid-cols-[1.4fr_0.9fr_0.9fr_0.9fr_0.75fr_0.75fr_auto_auto]"}`}>
           <FilterSelect
             label="Relatório"
             value={reportKind}
             onChange={(value) => {
               setReportKind(value as ReportKind);
+              setDepartmentId("all");
               setResponsible("all");
+              setStatus("all");
+              setDateFrom("");
+              setDateTo("");
             }}
             options={Object.entries(REPORT_LABELS)}
           />
-          <FilterSelect label="Status" value={status} onChange={(value) => setStatus(value as TicketStatus | "all")} options={[["all", "Todos"], ...Object.entries(STATUS_LABEL)]} />
+          {!isInventoryReport && <FilterSelect label="Status" value={status} onChange={(value) => setStatus(value as TicketStatus | "all")} options={[["all", "Todos"], ...Object.entries(STATUS_LABEL)]} />}
           <FilterSelect label="Departamento" value={departmentId} onChange={setDepartmentId} options={[["all", "Todos"], ...departmentFilterOptions.map((department) => [department.id, department.name] as [string, string])]} />
-          <FilterSelect label="Responsavel" value={responsible} onChange={setResponsible} options={responsibleFilterOptions} />
-          <DateField label="De" value={dateFrom} onChange={setDateFrom} />
-          <DateField label="Até" value={dateTo} onChange={setDateTo} />
-          <button type="button" onClick={() => exportRows(rows, `${filename}.csv`, "csv")} className="mt-6 h-11 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50">CSV</button>
-          <button type="button" onClick={() => exportRows(rows, `${filename}.xls`, "xls")} className="mt-6 h-11 rounded-md bg-[#00234B] px-4 text-sm font-semibold text-white">Excel</button>
+          <FilterSelect label="Responsável" value={responsible} onChange={setResponsible} options={responsibleFilterOptions} />
+          {!isInventoryReport && <DateField label="De" value={dateFrom} onChange={setDateFrom} />}
+          {!isInventoryReport && <DateField label="Até" value={dateTo} onChange={setDateTo} />}
+          <button type="button" onClick={() => exportRows(rows, `${filename}.csv`, "csv", REPORT_LABELS[reportKind])} className="mt-6 h-11 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50">CSV</button>
+          <button type="button" onClick={() => exportRows(rows, `${filename}.xls`, "xls", REPORT_LABELS[reportKind])} className="mt-6 h-11 rounded-md bg-[#00234B] px-4 text-sm font-semibold text-white">Excel</button>
+          {isInventoryReport && <button type="button" onClick={() => printInventoryReport(filteredAssets, inventorySummaryItems)} className="mt-6 h-11 rounded-md border border-[#00234B] px-4 text-sm font-semibold text-[#00234B] hover:bg-slate-50">Imprimir / PDF</button>}
         </div>
       </section>
+
+      {isInventoryReport && (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {inventorySummaryItems.map((item) => (
+            <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
+              <p className="mt-2 text-3xl font-semibold text-[#00234B]">{item.value}</p>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <header className="flex items-center justify-between border-b border-slate-200 p-5">
           <div>
             <h3 className="font-semibold">{REPORT_LABELS[reportKind]}</h3>
-            <p className="mt-1 text-sm text-slate-500">{loading ? "Carregando..." : `${rows.length} registro(s) encontrado(s)`}</p>
+            <p className="mt-1 text-sm text-slate-500">
+              {loading ? "Carregando..." : `${rows.length} registro(s) encontrado(s)${rows.length > 100 ? " · prévia dos primeiros 100; a exportação inclui todos" : ""}`}
+            </p>
           </div>
         </header>
         <div className="overflow-x-auto">
@@ -1786,7 +1856,7 @@ function AdminList({
   );
 }
 
-function exportRows(rows: ReportRow[], filename: string, format: "csv" | "xls") {
+function exportRows(rows: ReportRow[], filename: string, format: "csv" | "xls", title: string) {
   if (!rows.length) {
     toast.error("Não há dados para exportar.");
     return;
@@ -1803,8 +1873,124 @@ function exportRows(rows: ReportRow[], filename: string, format: "csv" | "xls") 
     return;
   }
 
-  const table = `<table><thead><tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(row[column] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const generatedAt = new Date().toLocaleString("pt-BR");
+  const table = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body { font-family: Arial, sans-serif; color: #172033; }
+    h1 { color: #00234B; font-size: 22px; margin-bottom: 4px; }
+    p { color: #526071; margin: 0 0 18px; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #00234B; color: #fff; font-weight: 700; text-align: left; }
+    th, td { border: 1px solid #cfd6df; padding: 7px 9px; vertical-align: top; }
+    tr:nth-child(even) td { background: #f4f6f8; }
+  </style></head><body>
+    <h1>${escapeHtml(title)}</h1>
+    <p>Gerado em ${escapeHtml(generatedAt)} · ${rows.length} registro(s)</p>
+    <table><thead><tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(row[column] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>
+  </body></html>`;
   downloadBlob(new Blob([`\uFEFF${table}`], { type: "application/vnd.ms-excel;charset=utf-8" }), filename);
+}
+
+function printInventoryReport(assets: InventoryAssetReport[], summary: Array<{ label: string; value: number }>) {
+  if (!assets.length) {
+    toast.error("Não há dados para imprimir.");
+    return;
+  }
+  const popup = window.open("", "_blank", "width=1280,height=900");
+  if (!popup) {
+    toast.error("O navegador bloqueou a janela de impressão. Permita pop-ups para o Portal.");
+    return;
+  }
+  popup.opener = null;
+  const generatedAt = new Date().toLocaleString("pt-BR");
+  const statusLabels: Record<string, string> = {
+    ACTIVE: "Ativo",
+    INACTIVE: "Inativo",
+    MAINTENANCE: "Manutenção",
+    DISPOSED: "Baixado",
+    IN_STOCK: "Em estoque",
+  };
+  const groupedAssets = new Map<string, InventoryAssetReport[]>();
+  [...assets]
+    .sort((first, second) => `${first.departmentName ?? "Sem departamento"}|${first.stationName ?? ""}|${first.assetCode}`.localeCompare(`${second.departmentName ?? "Sem departamento"}|${second.stationName ?? ""}|${second.assetCode}`))
+    .forEach((asset) => {
+      const department = asset.departmentName ?? "Sem departamento";
+      groupedAssets.set(department, [...(groupedAssets.get(department) ?? []), asset]);
+    });
+  const departmentSections = Array.from(groupedAssets.entries()).map(([department, departmentAssets]) => `
+    <section class="department">
+      <div class="department-title"><h2>${escapeHtml(department)}</h2><strong>${departmentAssets.length} ${departmentAssets.length === 1 ? "item" : "itens"}</strong></div>
+      <table>
+        <colgroup><col class="asset-code"><col class="equipment"><col class="responsible"><col class="station"><col class="location"><col class="status-col"></colgroup>
+        <thead><tr><th>Patrimônio</th><th>Equipamento / descrição</th><th>Responsável</th><th>Estação</th><th>Localização</th><th>Status</th></tr></thead>
+        <tbody>${departmentAssets.map((asset) => {
+          const equipment = asset.assetDescription && asset.assetDescription !== asset.assetType
+            ? `${asset.assetType} / ${asset.assetDescription}`
+            : asset.assetType || asset.assetDescription;
+          const statusClass = asset.assetStatus === "ACTIVE" ? "active" : asset.assetStatus === "MAINTENANCE" ? "maintenance" : asset.assetStatus === "DISPOSED" ? "disposed" : "neutral";
+          return `<tr>
+            <td class="code">${escapeHtml(asset.assetCode)}</td>
+            <td>${escapeHtml(equipment)}</td>
+            <td>${escapeHtml(asset.employeeName ?? "Sem responsável")}</td>
+            <td>${escapeHtml(asset.stationCode ?? "—")}</td>
+            <td>${escapeHtml(asset.stationName ?? "Sem localização")}</td>
+            <td><span class="status ${statusClass}">${escapeHtml(statusLabels[asset.assetStatus] ?? asset.assetStatus)}</span></td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    </section>`).join("");
+
+  popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Inventário patrimonial por departamento</title><style>
+    @page { size: A4 portrait; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; color: #172033; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    header { margin-bottom: 12px; text-align: center; }
+    .brand { align-items: center; display: flex; justify-content: center; gap: 10px; }
+    .brand img { border-radius: 50%; height: 50px; object-fit: cover; width: 50px; }
+    .brand-name { color: #00234B; font-family: Georgia, serif; font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+    .brand-subtitle { color: #9a742f; font-family: Georgia, serif; font-size: 13px; margin-top: 2px; }
+    h1 { color: #00234B; font-family: Georgia, serif; font-size: 25px; margin: 14px 0 4px; }
+    .subtitle { color: #58677b; font-size: 10px; margin: 0 auto; max-width: 610px; }
+    .summary { display: grid; grid-template-columns: repeat(${summary.length}, 1fr); gap: 6px; margin: 14px 0 16px; }
+    .summary div { background: #f8fafc; border: 1px solid #d8dee7; border-radius: 5px; padding: 7px 5px; text-align: center; }
+    .summary span { color: #607086; display: block; font-size: 7px; min-height: 17px; text-transform: uppercase; }
+    .summary strong { color: #9a742f; display: block; font-family: Georgia, serif; font-size: 18px; margin-top: 2px; }
+    .generated { color: #526071; font-size: 8px; margin: -8px 0 10px; text-align: right; }
+    .department { margin: 0 0 13px; }
+    .department-title { align-items: center; background: linear-gradient(90deg, #00315f, #00507e); border-radius: 4px 4px 0 0; color: white; display: flex; justify-content: space-between; padding: 7px 10px; break-after: avoid; }
+    .department-title h2 { font-family: Georgia, serif; font-size: 14px; margin: 0; text-transform: uppercase; }
+    .department-title strong { font-family: Georgia, serif; font-size: 9px; }
+    table { border-collapse: collapse; font-size: 7.5px; table-layout: fixed; width: 100%; }
+    col.asset-code { width: 12%; } col.equipment { width: 26%; } col.responsible { width: 22%; } col.station { width: 12%; } col.location { width: 19%; } col.status-col { width: 9%; }
+    thead { display: table-header-group; }
+    th { background: #dce5ec; color: #00234B; font-weight: 700; text-align: left; }
+    th, td { border: 1px solid #cfd7df; padding: 4px 5px; vertical-align: middle; overflow-wrap: anywhere; }
+    tbody tr:nth-child(even) td { background: #f6f8fa; }
+    tr { break-inside: avoid; }
+    td.code { color: #304662; font-family: Consolas, monospace; white-space: nowrap; }
+    .status { border-radius: 9px; display: inline-block; font-size: 6.5px; font-weight: 700; padding: 2px 5px; text-align: center; white-space: nowrap; }
+    .status.active { background: #d9f3e2; color: #22633a; }
+    .status.maintenance { background: #fff0c7; color: #875d00; }
+    .status.disposed { background: #f3d8d8; color: #8d3030; }
+    .status.neutral { background: #e7ebf0; color: #465467; }
+    footer { border-top: 1px solid #b99b5f; color: #607086; font-size: 7px; margin-top: 14px; padding-top: 6px; text-align: center; }
+  </style></head><body>
+    <header>
+      <div class="brand"><img src="${escapeHtml(`${window.location.origin}/favicon.png`)}" alt=""><div><div class="brand-name">CARTÓRIO ÍNDIO ARTIAGA</div><div class="brand-subtitle">4º Tabelionato de Notas</div></div></div>
+      <h1>Inventário Patrimonial por Departamento</h1>
+      <p class="subtitle">Relação de bens organizada por departamento, com seus respectivos responsáveis, estações, localizações e situação de uso.</p>
+    </header>
+    <section class="summary">${summary.map((item) => `<div><span>${escapeHtml(item.label)}</span><strong>${item.value}</strong></div>`).join("")}</section>
+    <div class="generated">Gerado em ${escapeHtml(generatedAt)} · ${assets.length} patrimônio(s)</div>
+    ${departmentSections}
+    <footer>Tecnologia a serviço da segurança jurídica · Documento gerado automaticamente pelo sistema de inventário patrimonial.</footer>
+  </body></html>`);
+  popup.document.close();
+  const startPrint = () => window.setTimeout(() => {
+    popup.focus();
+    popup.print();
+  }, 250);
+  if (popup.document.readyState === "complete") startPrint();
+  else popup.addEventListener("load", startPrint, { once: true });
 }
 
 function downloadBlob(blob: Blob, filename: string) {

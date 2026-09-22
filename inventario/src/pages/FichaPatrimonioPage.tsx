@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import { inventoryApi, type ApiHistoryEvent, type ApiEquipmentExchangeTerm } from '@/lib/inventory-api';
+import { ConferenceHistory } from "@/components/ConferenceHistory";
 import { toast } from 'sonner';
 
 /*
@@ -251,6 +252,7 @@ const FichaPatrimonioPage = () => {
 
           <div style={{ ...card, gap: 12 }}>
             <span style={kicker}>Etiqueta e conferência</span>
+            <ConferenceHistory assetId={asset.id} revision={asset} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 74, height: 74, border: `1px solid ${BORDER}`, borderRadius: 8, background: 'repeating-conic-gradient(#1B2430 0% 25%, #FFFFFF 0% 50%) 50%/12px 12px' }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

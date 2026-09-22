@@ -573,8 +573,8 @@ public class InventoryCommandService {
     }
 
     private String buildMovementDescription(AssetMovement movement) {
-        String assetCode = movement.getAsset().getAssetCode();
-        return switch (movement.getMovementType()) {
+        String assetCode = movement.getAsset() == null ? "(excluído)" : movement.getAsset().getAssetCode();
+        String description = switch (movement.getMovementType()) {
             case CREATED -> "Patrimonio " + assetCode + " criado";
             case UPDATED -> "Patrimonio " + assetCode + " atualizado";
             case LINKED -> "Patrimonio " + assetCode + " vinculado a " + safeStation(movement.getToStation());
@@ -583,6 +583,8 @@ public class InventoryCommandService {
             case STATUS_CHANGED -> "Status do patrimonio " + assetCode + " alterado";
             case INVENTORY_CHECKED -> "Conferencia registrada para " + assetCode;
         };
+        return description + (movement.getMovedBy() == null ? "" : " · por " + movement.getMovedBy())
+            + (movement.getReason() == null ? "" : " · " + movement.getReason());
     }
 
     private String safeStation(Station station) {

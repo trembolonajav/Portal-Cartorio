@@ -24,7 +24,10 @@ public record AssetDisposalResponse(
     LocalDateTime cancelledAt,
     String cancelReason,
     int itemCount,
+    int assetCount,
+    int materialCount,
     List<AssetDisposalItemResponse> items,
+    List<AssetDisposalMaterialResponse> materials,
     List<AssetDisposalDocumentResponse> documents,
     List<AssetDisposalEventResponse> events
 ) {

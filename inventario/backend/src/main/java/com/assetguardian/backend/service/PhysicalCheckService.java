@@ -4,6 +4,9 @@ import com.assetguardian.backend.api.dto.PhysicalCheckRequest;
 import com.assetguardian.backend.api.dto.PhysicalCheckResponse;
 import com.assetguardian.backend.api.dto.TransferAssetRequest;
 import com.assetguardian.backend.domain.Asset;
+import com.assetguardian.backend.domain.ConferenceFinalization;
+import com.assetguardian.backend.repository.ConferenceFinalizationRepository;
+import com.assetguardian.backend.api.dto.HistoryEventResponse;
 import com.assetguardian.backend.domain.AssignmentStatus;
 import com.assetguardian.backend.domain.CheckResult;
 import com.assetguardian.backend.domain.PhysicalCheck;
@@ -23,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional
 public class PhysicalCheckService {
 
+    private final ConferenceFinalizationRepository finalizationRepository;
     private final AssetRepository assetRepository;
     private final StationRepository stationRepository;
     private final PhysicalCheckRepository physicalCheckRepository;
@@ -32,7 +36,8 @@ public class PhysicalCheckService {
     public PhysicalCheckService(AssetRepository assetRepository, StationRepository stationRepository,
                                 PhysicalCheckRepository physicalCheckRepository,
                                 AssetAssignmentRepository assetAssignmentRepository,
-                                InventoryCommandService inventoryCommandService) {
+                                InventoryCommandService inventoryCommandService, ConferenceFinalizationRepository finalizationRepository) {
+        this.finalizationRepository = finalizationRepository;
         this.assetRepository = assetRepository;
         this.stationRepository = stationRepository;
         this.physicalCheckRepository = physicalCheckRepository;
@@ -88,12 +93,30 @@ public class PhysicalCheckService {
         station.setLastConferenceAt(LocalDateTime.now());
         station.setLastConferenceBy(username);
         stationRepository.save(station);
+        ConferenceFinalization finalization = new ConferenceFinalization();
+        finalization.setStation(station);
+        finalization.setCheckedBy(username);
+        finalization.setCheckedAt(station.getLastConferenceAt());
+        finalizationRepository.save(finalization);
     }
 
     @Transactional(readOnly = true)
     public List<PhysicalCheckResponse> history(Long assetId) {
         return physicalCheckRepository.findByAssetIdOrderByCheckedAtDesc(assetId).stream()
             .map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PhysicalCheckResponse> stationHistory(Long stationId) {
+        return physicalCheckRepository.findByStationIdOrExpectedStationIdOrderByCheckedAtDesc(stationId, stationId)
+            .stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistoryEventResponse> finalizations(Long stationId) {
+        return finalizationRepository.findByStationIdOrderByCheckedAtDesc(stationId).stream()
+            .map(f -> new HistoryEventResponse("CONFERENCE_FINALIZED", "Estação finalizada por " + f.getCheckedBy(), f.getCheckedAt()))
+            .toList();
     }
 
     private PhysicalCheckResponse toResponse(PhysicalCheck c) {

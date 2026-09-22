@@ -4,9 +4,14 @@ import com.assetguardian.backend.api.dto.AssetDisposalCancelRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalCreateRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalResponse;
 import com.assetguardian.backend.service.AssetDisposalService;
+import com.assetguardian.backend.domain.AssetDisposalDocumentType;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -69,6 +74,31 @@ public class AssetDisposalController {
         @RequestParam(required = false) String username
     ) {
         return service.uploadSignedTerm(id, file, username);
+    }
+
+    @PostMapping(path = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public AssetDisposalResponse uploadDocument(
+        @PathVariable Long id,
+        @RequestParam AssetDisposalDocumentType type,
+        @RequestParam("file") MultipartFile file,
+        @RequestParam(required = false) String username
+    ) {
+        return service.uploadDocument(id, type, file, username);
+    }
+
+    @GetMapping("/{id}/documents/{documentId}")
+    public ResponseEntity<Resource> document(@PathVariable Long id, @PathVariable Long documentId) {
+        AssetDisposalService.StoredDocument document = service.getDocument(id, documentId);
+        MediaType contentType;
+        try {
+            contentType = document.mimeType() == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(document.mimeType());
+        } catch (IllegalArgumentException ex) {
+            contentType = MediaType.APPLICATION_OCTET_STREAM;
+        }
+        return ResponseEntity.ok()
+            .contentType(contentType)
+            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(document.fileName(), StandardCharsets.UTF_8).build().toString())
+            .body(new FileSystemResource(document.path()));
     }
 
     @PostMapping("/{id}/finalize")

@@ -148,6 +148,7 @@ export interface ApiAuthMe {
 
 export type ApiDisposalStatus = "DRAFT" | "WAITING_SIGNATURE" | "FINALIZED" | "CANCELLED";
 export type ApiDisposalReason = "OBSOLESCENCE" | "IRREPAIRABLE_DEFECT" | "PHYSICAL_DAMAGE" | "LOSS" | "REPLACEMENT" | "DONATION" | "DISCARD" | "SALE" | "OTHER";
+export type ApiDisposalDocumentType = "SIGNED_TERM" | "PHOTO" | "TECHNICAL_REPORT" | "DISPOSAL_RECEIPT" | "ORIGINAL_PROCESS" | "OTHER";
 
 export interface ApiAssetDisposalItem {
   id: number;
@@ -167,11 +168,21 @@ export interface ApiAssetDisposalItem {
 
 export interface ApiAssetDisposalDocument {
   id: number;
-  type: string;
+  type: ApiDisposalDocumentType;
   fileName: string;
   mimeType: string | null;
   uploadedBy: string | null;
   uploadedAt: string;
+}
+
+export interface ApiAssetDisposalMaterial {
+  id: number;
+  category: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  notes: string | null;
+  containsSensitiveData: boolean;
 }
 
 export interface ApiAssetDisposalEvent {
@@ -200,7 +211,10 @@ export interface ApiAssetDisposal {
   cancelledAt: string | null;
   cancelReason: string | null;
   itemCount: number;
+  assetCount: number;
+  materialCount: number;
   items: ApiAssetDisposalItem[];
+  materials: ApiAssetDisposalMaterial[];
   documents: ApiAssetDisposalDocument[];
   events: ApiAssetDisposalEvent[];
 }
@@ -335,6 +349,8 @@ export const inventoryApi = {
 
   // Conferência física (mobile)
   recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: number | null; registerMovement?: boolean; note?: string }) => apiPost<ApiPhysicalCheck>(`/assets/${assetId}/check`, body),
+  conferenceFinalizations: (stationId: string) => apiGet<ApiHistoryEvent[]>(`/stations/${stationId}/conference-finalizations`),
+  stationChecks: (stationId: string) => apiGet<ApiPhysicalCheck[]>(`/stations/${stationId}/checks`),
   checkHistory: (assetId: string) => apiGet<ApiPhysicalCheck[]>(`/assets/${assetId}/checks`),
   finalizeConference: (stationId: string) => apiPost<void>(`/stations/${stationId}/finalize-conference`),
 
@@ -349,7 +365,7 @@ export const inventoryApi = {
 
   listDisposals: () => apiGet<ApiAssetDisposal[]>("/asset-disposals"),
   getDisposal: (id: string) => apiGet<ApiAssetDisposal>(`/asset-disposals/${id}`),
-  createDisposal: (body: { assetIds: number[]; reason: ApiDisposalReason; destination: string; justification: string; notes?: string; authorizedByName: string; authorizationDate?: string; requestedBy?: string }) => apiPost<ApiAssetDisposal>("/asset-disposals", body),
+  createDisposal: (body: { assetIds: number[]; materials: Array<{ category: string; description: string; quantity: number; unit: string; notes?: string; containsSensitiveData: boolean }>; reason: ApiDisposalReason; destination: string; justification: string; notes?: string; authorizedByName: string; authorizationDate?: string; requestedBy?: string }) => apiPost<ApiAssetDisposal>("/asset-disposals", body),
   generateDisposalTerm: (id: string, username?: string) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/generate-term${username ? `?username=${encodeURIComponent(username)}` : ""}`),
   disposalTermUrl: (id: string) => apiUrl(`/asset-disposals/${id}/term`),
   disposalSignatureSheetUrl: (id: string) => apiUrl(`/asset-disposals/${id}/signature-sheet`),
@@ -359,6 +375,14 @@ export const inventoryApi = {
     if (username) form.append("username", username);
     return apiPostForm<ApiAssetDisposal>(`/asset-disposals/${id}/upload-signed-term`, form);
   },
+  uploadDisposalDocument: (id: string, type: ApiDisposalDocumentType, file: File, username?: string) => {
+    const form = new FormData();
+    form.append("type", type);
+    form.append("file", file);
+    if (username) form.append("username", username);
+    return apiPostForm<ApiAssetDisposal>(`/asset-disposals/${id}/documents`, form);
+  },
+  disposalDocumentUrl: (id: string, documentId: string) => apiUrl(`/asset-disposals/${id}/documents/${documentId}`),
   finalizeDisposal: (id: string, username?: string) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/finalize${username ? `?username=${encodeURIComponent(username)}` : ""}`),
   cancelDisposal: (id: string, body: { reason: string; username?: string }) => apiPost<ApiAssetDisposal>(`/asset-disposals/${id}/cancel`, body),
 

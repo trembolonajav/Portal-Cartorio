@@ -1,3 +1,4 @@
+import { ConferenceHistory, checkLabel, conferenceDate } from "@/components/ConferenceHistory";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Search, Check, AlertTriangle, X, Plus, Loader2, CheckCircle2 } from "lucide-react";
@@ -39,8 +40,6 @@ const ConferenciaEstacaoPage = () => {
   const recordCheck = useInventoryStore((s) => s.recordCheck);
   const finalizeConference = useInventoryStore((s) => s.finalizeConference);
   const addAsset = useInventoryStore((s) => s.addAsset);
-  const linkAsset = useInventoryStore((s) => s.linkAsset);
-  const transferAsset = useInventoryStore((s) => s.transferAsset);
   const allAssets = useInventoryStore((s) => s.assets);
   const getStationForAsset = useInventoryStore((s) => s.getStationForAsset);
 
@@ -99,7 +98,7 @@ const ConferenciaEstacaoPage = () => {
         note: divNote.trim() || undefined,
       });
       if (res.ok) toast.success(`Divergência registrada para ${divAsset.assetCode}`);
-      else toast.error(res.error || "Falha ao registrar divergência");
+      else { toast.error(res.error || "Falha ao registrar divergência"); return; }
       setDivAsset(null); setDivNote(""); setDivType("WRONG_LOCATION");
     } finally { setBusyId(null); }
   };
@@ -115,9 +114,8 @@ const ConferenciaEstacaoPage = () => {
         serialNumber: novo.serialNumber.trim() || undefined, status: novo.status,
         notes: novo.notes.trim() || undefined,
       } as Omit<Asset, "id">);
-      const linked = await linkAsset(id, station.id);
-      if (!linked.ok) { toast.error(linked.error || "Patrimônio criado, mas falha ao vincular"); }
-      await recordCheck(id, { result: "FOUND", stationId: station.id, note: "Cadastrado na conferência" });
+      const check = await recordCheck(id, { result: "FOUND", stationId: station.id, registerMovement: true, note: "Cadastrado na conferência" });
+      if (!check.ok) { toast.error(check.error || "Patrimônio criado, mas a conferência não foi salva. Busque o código para tentar novamente."); closeAdd(); return; }
       toast.success(`${novo.assetCode.trim()} cadastrado e vinculado`);
       closeAdd();
     } catch (e) {
@@ -143,9 +141,9 @@ const ConferenciaEstacaoPage = () => {
     setTrazerBusy(asset.id);
     try {
       const cur = getStationForAsset(asset.id);
-      const moved = cur ? await transferAsset(asset.id, station.id) : await linkAsset(asset.id, station.id);
-      if (moved && moved.ok === false) { toast.error(moved.error || "Falha ao trazer"); return; }
-      await recordCheck(asset.id, { result: "FOUND", stationId: station.id, note: cur ? `Trazido de ${cur.code} por conferência` : "Vinculado na conferência" });
+      const check = await recordCheck(asset.id, { result: "FOUND", stationId: station.id, registerMovement: true,
+        note: cur ? `Local errado: transferido de ${cur.code} para ${station.code} na conferência` : "Incluído nesta estação na conferência" });
+      if (!check.ok) { toast.error(check.error || "Falha ao salvar transferência e conferência"); return; }
       toast.success(cur ? `${asset.assetCode} trazido de ${cur.code}` : `${asset.assetCode} vinculado`);
       closeAdd();
     } finally { setTrazerBusy(null); }
@@ -201,6 +199,10 @@ const ConferenciaEstacaoPage = () => {
       </div>
 
       <main className="flex-1 space-y-2 p-3">
+        {station.lastConferenceAt && <p className="text-xs text-muted-foreground">Última finalização: {conferenceDate(station.lastConferenceAt)} · {station.lastConferenceBy}</p>}
+        <details className="rounded-xl border bg-card p-3"><summary className="cursor-pointer text-sm font-semibold">Histórico de conferências e movimentações</summary>
+          <ConferenceHistory stationId={station.id} revision={allAssets} movements />
+        </details>
         {list.length === 0 && <p className="py-8 text-center text-sm italic text-muted-foreground">Nenhum patrimônio {query ? "encontrado" : "nesta estação"}.</p>}
         {list.map((a) => (
           <div key={a.id} className="rounded-xl border border-border bg-card p-3">
@@ -209,6 +211,7 @@ const ConferenciaEstacaoPage = () => {
               <div className="min-w-0 flex-1">
                 <div className="num-mono text-[13px] font-semibold text-primary">{a.assetCode}</div>
                 <div className="text-[12px] text-muted-foreground">{a.description}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{a.lastCheckResult ? `${checkLabel[a.lastCheckResult]} · ${conferenceDate(a.lastCheckAt)} · ${a.lastCheckBy ?? "Usuário não informado"}` : "Ainda não conferido"}</div>
               </div>
             </div>
             <div className="mt-2.5 grid grid-cols-3 gap-2">
@@ -235,7 +238,7 @@ const ConferenciaEstacaoPage = () => {
       </main>
 
       <footer className="fixed inset-x-0 bottom-0 z-10 mx-auto max-w-md border-t border-border bg-card p-3">
-        <Button onClick={finalize} disabled={finalizing} className="h-12 w-full text-base font-semibold">
+        <Button onClick={finalize} disabled={finalizing || !!busyId || savingNovo || !!trazerBusy} className="h-12 w-full text-base font-semibold">
           {finalizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <><CheckCircle2 className="mr-2 h-5 w-5" />Finalizar estação · {checked}/{total}</>}
         </Button>
       </footer>
@@ -286,6 +289,7 @@ const ConferenciaEstacaoPage = () => {
                     <div key={a.id} className="border-b border-border/60 py-2.5 last:border-0">
                       <div className="num-mono text-[13px] font-semibold text-primary">{a.assetCode}</div>
                       <div className="text-[12px] text-muted-foreground">{a.description}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{a.lastCheckResult ? `${checkLabel[a.lastCheckResult]} · ${conferenceDate(a.lastCheckAt)} · ${a.lastCheckBy ?? "Usuário não informado"}` : "Ainda não conferido"}</div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">{cur ? `Está em ${cur.code} — será transferido para cá` : "Sem local no cadastro"}</div>
                       <div className="mt-1.5 flex gap-2">
                         <Button size="sm" className="h-8 flex-1 text-[12px]" disabled={trazerBusy === a.id} onClick={() => bring(a)}>

@@ -10,6 +10,7 @@ public record ResponsibilityTermResponse(
     ResponsibilityTermStatus status,
     String employeeId,
     String employeeName,
+    String employeeJobTitle,
     String department,
     String location,
     String notes,

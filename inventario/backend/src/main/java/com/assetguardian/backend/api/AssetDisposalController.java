@@ -11,6 +11,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,19 +38,33 @@ public class AssetDisposalController {
         return service.list();
     }
 
+    @GetMapping("/open-asset-ids")
+    public List<Long> listOpenAssetIds() {
+        return service.listOpenAssetIds();
+    }
+
     @GetMapping("/{id}")
     public AssetDisposalResponse get(@PathVariable Long id) {
         return service.get(id);
     }
 
+    @GetMapping("/by-asset/{assetId}")
+    public List<AssetDisposalResponse> listForAsset(@PathVariable Long assetId) {
+        return service.listForAsset(assetId);
+    }
+
     @PostMapping
-    public AssetDisposalResponse create(@Valid @RequestBody AssetDisposalCreateRequest request) {
-        return service.create(request);
+    public AssetDisposalResponse create(@Valid @RequestBody AssetDisposalCreateRequest request, Authentication authentication) {
+        return service.create(request, authentication.getName());
     }
 
     @PostMapping("/{id}/generate-term")
-    public AssetDisposalResponse generateTerm(@PathVariable Long id, @RequestParam(required = false) String username) {
-        return service.generateTerm(id, username);
+    public AssetDisposalResponse generateTerm(
+        @PathVariable Long id,
+        @RequestParam(required = false) String username,
+        Authentication authentication
+    ) {
+        return service.generateTerm(id, authentication.getName());
     }
 
     @GetMapping("/{id}/term")
@@ -67,13 +83,24 @@ public class AssetDisposalController {
             .body(service.signatureSheetPdf(id));
     }
 
+    @PutMapping("/{id}/items/{itemId}/assessment")
+    public AssetDisposalResponse updateItemAssessment(
+        @PathVariable Long id,
+        @PathVariable Long itemId,
+        @Valid @RequestBody com.assetguardian.backend.api.dto.AssetDisposalItemAssessmentRequest request,
+        Authentication authentication
+    ) {
+        return service.updateItemAssessment(id, itemId, request, authentication.getName());
+    }
+
     @PostMapping(path = "/{id}/upload-signed-term", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AssetDisposalResponse uploadSignedTerm(
         @PathVariable Long id,
         @RequestParam("file") MultipartFile file,
-        @RequestParam(required = false) String username
+        @RequestParam(required = false) String username,
+        Authentication authentication
     ) {
-        return service.uploadSignedTerm(id, file, username);
+        return service.uploadSignedTerm(id, file, authentication.getName());
     }
 
     @PostMapping(path = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -81,9 +108,11 @@ public class AssetDisposalController {
         @PathVariable Long id,
         @RequestParam AssetDisposalDocumentType type,
         @RequestParam("file") MultipartFile file,
-        @RequestParam(required = false) String username
+        @RequestParam(required = false) String username,
+        @RequestParam(required = false) Long disposalItemId,
+        Authentication authentication
     ) {
-        return service.uploadDocument(id, type, file, username);
+        return service.uploadDocument(id, type, file, authentication.getName(), disposalItemId);
     }
 
     @GetMapping("/{id}/documents/{documentId}")
@@ -102,12 +131,20 @@ public class AssetDisposalController {
     }
 
     @PostMapping("/{id}/finalize")
-    public AssetDisposalResponse finalizeDisposal(@PathVariable Long id, @RequestParam(required = false) String username) {
-        return service.finalizeDisposal(id, username);
+    public AssetDisposalResponse finalizeDisposal(
+        @PathVariable Long id,
+        @RequestParam(required = false) String username,
+        Authentication authentication
+    ) {
+        return service.finalizeDisposal(id, authentication.getName());
     }
 
     @PostMapping("/{id}/cancel")
-    public AssetDisposalResponse cancel(@PathVariable Long id, @Valid @RequestBody AssetDisposalCancelRequest request) {
-        return service.cancel(id, request);
+    public AssetDisposalResponse cancel(
+        @PathVariable Long id,
+        @Valid @RequestBody AssetDisposalCancelRequest request,
+        Authentication authentication
+    ) {
+        return service.cancel(id, request, authentication.getName());
     }
 }

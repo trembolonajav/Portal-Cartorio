@@ -50,4 +50,13 @@ public class AssetMovement extends BaseEntity {
 
     @Column(name = "moved_at", nullable = false)
     private LocalDateTime movedAt;
+
+    @Column(name = "source_process_type", length = 30)
+    private String sourceProcessType;
+
+    @Column(name = "source_process_id")
+    private Long sourceProcessId;
+
+    @Column(name = "source_process_number", length = 30)
+    private String sourceProcessNumber;
 }

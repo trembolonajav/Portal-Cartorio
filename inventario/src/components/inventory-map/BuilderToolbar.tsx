@@ -14,6 +14,7 @@ import { useInventoryMapStore } from '@/features/inventory-map/store/useInventor
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { ElementType, LayoutElement, StationStatus, SpaceType } from '@/features/inventory-map/types/inventoryMap.types';
 import { toast } from 'sonner';
+import { assetStatusLabel } from '@/lib/status-labels';
 
 const toolItems: { type: ElementType; label: string; icon: React.ReactNode }[] = [
   { type: 'WALL', label: 'Parede', icon: <Minus className="h-4 w-4" /> },
@@ -131,7 +132,7 @@ const BuilderToolbar = () => {
   const availableEquipmentAssets = selectedEquipmentCategory
     ? assets.filter(asset => {
       if (asset.id === selectedElementAssetId) return true;
-      if (asset.type !== selectedEquipmentCategory || asset.status === 'DISPOSED') return false;
+      if (asset.type !== selectedEquipmentCategory || asset.status === 'DISPOSED' || asset.status === 'VOIDED') return false;
       if (mappedAssetIds.has(asset.id)) return false;
       return !assignments.some(assignment => assignment.assetId === asset.id && assignment.status === 'ACTIVE');
     })
@@ -339,7 +340,8 @@ const BuilderToolbar = () => {
                   </button>
                 ))}
               </div>
-              {placingType && <p className="mt-3 text-[11px] text-bronze font-medium">Clique no mapa para posicionar</p>}
+              {placingType === 'WALL' && <p className="mt-3 text-[11px] text-bronze font-medium leading-relaxed">Clique para marcar cada canto da parede. Trava em 90° (segure Shift para liberar), ímã nas pontas existentes. Enter, duplo clique ou botão direito conclui; clicar no 1º ponto fecha a sala. Esc sai.</p>}
+              {placingType && placingType !== 'WALL' && <p className="mt-3 text-[11px] text-bronze font-medium">Clique no mapa para posicionar</p>}
             </div>
           )}
           {isAdmin && mode === 'EDIT' && selectedElement && (
@@ -402,7 +404,7 @@ const BuilderToolbar = () => {
                       <div className="rounded-md border border-border bg-secondary/40 p-2 text-[11px] text-muted-foreground">
                         <p className="font-medium text-foreground">{selectedElementAsset.assetCode} - {selectedElementAsset.description}</p>
                         <p>{[selectedElementAsset.manufacturer, selectedElementAsset.model].filter(Boolean).join(' - ') || 'Marca e modelo nao informados'}</p>
-                        <p>Status: {selectedElementAsset.status}</p>
+                        <p>Status: {assetStatusLabel(selectedElementAsset.status)}</p>
                       </div>
                     ) : (
                       <p className="text-[11px] text-muted-foreground">Selecione um patrimonio {selectedEquipmentCategory.toLowerCase()} sem vinculo ativo em estacao.</p>
@@ -448,7 +450,7 @@ const BuilderToolbar = () => {
                 <SelectContent>
                   <SelectItem value="ACTIVE">Ativa</SelectItem>
                   <SelectItem value="INACTIVE">Inativa</SelectItem>
-                  <SelectItem value="MAINTENANCE">Manutenção</SelectItem>
+                  <SelectItem value="MAINTENANCE">Em manutenção</SelectItem>
                 </SelectContent>
               </Select>
             </div>

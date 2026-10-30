@@ -6,9 +6,69 @@ import type { Station, Person, Asset, AssetAssignment, Department, Employee, Spa
 import type { ApiLayout, ApiLayoutElement } from '@/lib/inventory-api';
 
 const kindToElementType = (k: FurnitureKind): ApiLayoutElement['elementType'] =>
-  k === 'wall' ? 'WALL' : k === 'partition' ? 'PARTITION' : k === 'label' ? 'LABEL' : 'ROOM_BLOCK';
+  k === 'wall' || k === 'wall-module' ? 'WALL' : k === 'partition' ? 'PARTITION' : k === 'label' ? 'LABEL' : 'ROOM_BLOCK';
+const isStructuralFurniture = (k: FurnitureKind) =>
+  k === 'wall' || k === 'wall-module' || k === 'partition' || k === 'door-left' || k === 'door-right';
 const elementTypeToKind = (t: string): FurnitureKind =>
   t === 'WALL' ? 'wall' : t === 'PARTITION' ? 'partition' : t === 'LABEL' ? 'label' : 'cabinet';
+
+const normalizeLegacyWallRotation = (item: FurnitureItem): FurnitureItem => {
+  if (item.kind !== 'wall' || item.points) return item;
+  const normalizedRotation = ((item.rotation % 360) + 360) % 360;
+  if (normalizedRotation === 0) return item;
+  if (normalizedRotation === 180) return { ...item, rotation: 0 };
+  if (normalizedRotation !== 90 && normalizedRotation !== 270) return item;
+  const centerX = item.x + item.width / 2;
+  const centerY = item.y + item.height / 2;
+  return {
+    ...item,
+    x: centerX - item.height / 2,
+    y: centerY - item.width / 2,
+    width: item.height,
+    height: item.width,
+    rotation: 0,
+  };
+};
+
+// Espessura uniforme das paredes (igual ao editor de referência: 15 cm ≈ 15 px).
+const WALL_THICKNESS = 15;
+
+// Converte parede-retângulo antiga em polilinha (linha de centro), pra ficar igual
+// à parede desenhada por cantos: espessura fixa, sem esticar/girar, emendas limpas.
+const convertLegacyWall = (item: FurnitureItem): FurnitureItem => {
+  if (item.kind !== 'wall' || item.points) return item;
+  const horizontal = item.width >= item.height;
+  const points: number[][] = horizontal
+    ? [[item.x, Math.round(item.y + item.height / 2)], [item.x + item.width, Math.round(item.y + item.height / 2)]]
+    : [[Math.round(item.x + item.width / 2), item.y], [Math.round(item.x + item.width / 2), item.y + item.height]];
+  return { ...item, points, thickness: WALL_THICKNESS };
+};
+
+const STRUCTURE_GRID = 20;
+const snapStructure = (value: number) => Math.round(value / STRUCTURE_GRID) * STRUCTURE_GRID;
+const alignStructureToGrid = (item: FurnitureItem): FurnitureItem => {
+  if (item.points) return item;
+  if (item.kind === 'wall') {
+    if (item.width >= item.height) {
+      const width = Math.max(STRUCTURE_GRID, snapStructure(item.width));
+      const centerY = snapStructure(item.y + item.height / 2);
+      return { ...item, x: snapStructure(item.x), y: centerY - item.height / 2, width };
+    }
+    const height = Math.max(STRUCTURE_GRID, snapStructure(item.height));
+    const centerX = snapStructure(item.x + item.width / 2);
+    return { ...item, x: centerX - item.width / 2, y: snapStructure(item.y), height };
+  }
+  if (item.kind === 'door-left' || item.kind === 'door-right') {
+    return {
+      ...item,
+      x: snapStructure(item.x),
+      y: snapStructure(item.y),
+      width: Math.max(STRUCTURE_GRID, snapStructure(item.width)),
+      height: Math.max(STRUCTURE_GRID, snapStructure(item.height)),
+    };
+  }
+  return item;
+};
 
 export type HistoryActionType = string;
 
@@ -36,7 +96,7 @@ interface InventoryState {
 
   addAsset: (asset: Omit<Asset, 'id'>) => Promise<string>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
-  deleteAsset: (id: string) => Promise<void>;
+  voidAsset: (id: string, reason: string) => Promise<void>;
   importAssets: (items: Omit<Asset, 'id'>[]) => Promise<{ imported: number; skipped: number }>;
   isAssetCodeUnique: (code: string, excludeId?: string) => boolean;
 
@@ -58,10 +118,10 @@ interface InventoryState {
   getChildSpaces: (parentId?: string) => Space[];
   getSpacePath: (spaceId: string) => Space[];
 
-  linkAsset: (assetId: string, stationId: string) => Promise<{ ok: boolean; error?: string }>;
-  unlinkAsset: (assetId: string) => Promise<void>;
-  transferAsset: (assetId: string, toStationId: string) => Promise<{ ok: boolean; error?: string }>;
-  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: string | null; registerMovement?: boolean; note?: string }) => Promise<{ ok: boolean; error?: string }>;
+  linkAsset: (assetId: string, stationId: string, reason: string) => Promise<{ ok: boolean; error?: string }>;
+  unlinkAsset: (assetId: string, reason: string) => Promise<void>;
+  transferAsset: (assetId: string, toStationId: string, reason: string) => Promise<{ ok: boolean; error?: string }>;
+  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: string | null; registerMovement?: boolean; note?: string }) => Promise<{ ok: boolean; error?: string; checkId?: number }>;
   finalizeConference: (stationId: string) => Promise<void>;
   loadFurniture: (spaceId: string) => Promise<FurnitureItem[]>;
   saveFurniture: (spaceId: string, items: FurnitureItem[]) => Promise<void>;
@@ -137,6 +197,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         id: String(item.id),
         fullName: item.fullName,
         cpf: item.cpf || '',
+        jobTitle: item.jobTitle || undefined,
         status: item.status,
         departmentId: toId(item.departmentId),
         stationId: toId(item.stationId),
@@ -177,13 +238,42 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         acquisitionDate: item.acquisitionDate || undefined,
         fiscalNote: item.fiscalNote || undefined,
         accountingCategory: item.accountingCategory || undefined,
+        accountingGroup: item.accountingGroup || undefined,
+        accountingTreatment: item.accountingTreatment || undefined,
         acquisitionValue: item.acquisitionValue ?? undefined,
         depreciationRate: item.depreciationRate ?? undefined,
         usefulLifeYears: item.usefulLifeYears ?? undefined,
+        usefulLifeMonths: item.usefulLifeMonths ?? undefined,
+        residualValue: item.residualValue ?? undefined,
+        depreciationStartDate: item.depreciationStartDate || undefined,
+        depreciationMethod: item.depreciationMethod || undefined,
+        policyVersion: item.policyVersion ?? undefined,
         warrantyUntil: item.warrantyUntil || undefined,
+        notes: item.notes || undefined,
         lastCheckAt: item.lastCheckAt || undefined,
         lastCheckBy: item.lastCheckBy || undefined,
         lastCheckResult: item.lastCheckResult || undefined,
+        voidedAt: item.voidedAt || undefined,
+        voidedBy: item.voidedBy || undefined,
+        voidReason: item.voidReason || undefined,
+        nfeAccessKey: item.nfeAccessKey || undefined,
+        fiscalNoteSeries: item.fiscalNoteSeries || undefined,
+        supplierName: item.supplierName || undefined,
+        acquisitionBatch: item.acquisitionBatch || undefined,
+        nfItemCode: item.nfItemCode || undefined,
+        supplierOrder: item.supplierOrder || undefined,
+        initialCondition: item.initialCondition || undefined,
+        conditionGrade: item.conditionGrade || undefined,
+        functionalStatus: item.functionalStatus || undefined,
+        conditionNotes: item.conditionNotes || undefined,
+        partNumber: item.partNumber || undefined,
+        regulatoryModel: item.regulatoryModel || undefined,
+        ncm: item.ncm || undefined,
+        ean: item.ean || undefined,
+        upc: item.upc || undefined,
+        color: item.color || undefined,
+        ram: item.ram || undefined,
+        storage: item.storage || undefined,
       })) as (Asset & { stationId?: string; assignedAt?: string })[];
 
       const spaces: Space[] = spacesRaw.map(item => ({
@@ -258,6 +348,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     const created = await inventoryApi.createEmployee({
       fullName: data.fullName,
       cpf: data.cpf,
+      jobTitle: data.jobTitle || null,
       status: data.status,
       departmentId: data.departmentId || null,
     });
@@ -273,6 +364,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     await inventoryApi.updateEmployee(id, {
       fullName: updates.fullName ?? current.fullName,
       cpf: updates.cpf ?? current.cpf,
+      jobTitle: updates.jobTitle === undefined ? (current.jobTitle || null) : (updates.jobTitle || null),
       status: updates.status ?? current.status,
       departmentId: updates.departmentId === undefined
         ? (current.departmentId || null)
@@ -353,6 +445,25 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       model: assetData.model,
       processor: assetData.processor,
       operatingSystem: assetData.os,
+      fiscalNote: assetData.fiscalNote,
+      nfeAccessKey: assetData.nfeAccessKey,
+      fiscalNoteSeries: assetData.fiscalNoteSeries,
+      supplierName: assetData.supplierName,
+      acquisitionBatch: assetData.acquisitionBatch,
+      nfItemCode: assetData.nfItemCode,
+      supplierOrder: assetData.supplierOrder,
+      initialCondition: assetData.initialCondition,
+      conditionGrade: assetData.conditionGrade,
+      functionalStatus: assetData.functionalStatus,
+      conditionNotes: assetData.conditionNotes,
+      partNumber: assetData.partNumber,
+      regulatoryModel: assetData.regulatoryModel,
+      ncm: assetData.ncm,
+      ean: assetData.ean,
+      upc: assetData.upc,
+      color: assetData.color,
+      ram: assetData.ram,
+      storage: assetData.storage,
     });
     await get().refreshAll();
     return String(created.assetId);
@@ -372,12 +483,44 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       model: updates.model ?? current.model,
       processor: updates.processor ?? current.processor,
       operatingSystem: updates.os ?? current.os,
+      acquisitionDate: updates.acquisitionDate ?? current.acquisitionDate,
+      fiscalNote: updates.fiscalNote ?? current.fiscalNote,
+      accountingCategory: updates.accountingCategory ?? current.accountingCategory,
+      accountingGroup: updates.accountingGroup ?? current.accountingGroup,
+      accountingTreatment: updates.accountingTreatment ?? current.accountingTreatment,
+      acquisitionValue: updates.acquisitionValue ?? current.acquisitionValue,
+      depreciationRate: updates.depreciationRate ?? current.depreciationRate,
+      usefulLifeYears: updates.usefulLifeYears ?? current.usefulLifeYears,
+      usefulLifeMonths: updates.usefulLifeMonths ?? current.usefulLifeMonths,
+      residualValue: updates.residualValue ?? current.residualValue,
+      depreciationStartDate: updates.depreciationStartDate ?? current.depreciationStartDate,
+      depreciationMethod: updates.depreciationMethod ?? current.depreciationMethod,
+      warrantyUntil: updates.warrantyUntil ?? current.warrantyUntil,
+      notes: updates.notes ?? current.notes,
+      nfeAccessKey: updates.nfeAccessKey ?? current.nfeAccessKey,
+      fiscalNoteSeries: updates.fiscalNoteSeries ?? current.fiscalNoteSeries,
+      supplierName: updates.supplierName ?? current.supplierName,
+      acquisitionBatch: updates.acquisitionBatch ?? current.acquisitionBatch,
+      nfItemCode: updates.nfItemCode ?? current.nfItemCode,
+      supplierOrder: updates.supplierOrder ?? current.supplierOrder,
+      initialCondition: updates.initialCondition ?? current.initialCondition,
+      conditionGrade: updates.conditionGrade ?? current.conditionGrade,
+      functionalStatus: updates.functionalStatus ?? current.functionalStatus,
+      conditionNotes: updates.conditionNotes ?? current.conditionNotes,
+      partNumber: updates.partNumber ?? current.partNumber,
+      regulatoryModel: updates.regulatoryModel ?? current.regulatoryModel,
+      ncm: updates.ncm ?? current.ncm,
+      ean: updates.ean ?? current.ean,
+      upc: updates.upc ?? current.upc,
+      color: updates.color ?? current.color,
+      ram: updates.ram ?? current.ram,
+      storage: updates.storage ?? current.storage,
     });
     await get().refreshAll();
   },
 
-  deleteAsset: async (id) => {
-    await inventoryApi.deleteAsset(id);
+  voidAsset: async (id, reason) => {
+    await inventoryApi.voidAsset(id, reason);
     await get().refreshAll();
   },
 
@@ -407,9 +550,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     return { imported, skipped };
   },
 
-  linkAsset: async (assetId, stationId) => {
+  linkAsset: async (assetId, stationId, reason) => {
     try {
-      await inventoryApi.linkAsset(assetId, { stationId: Number(stationId), performedBy: getCurrentUsername() || undefined });
+      await inventoryApi.linkAsset(assetId, { stationId: Number(stationId), reason });
       await get().refreshAll();
       await get().loadStationHistory(stationId);
       return { ok: true };
@@ -418,19 +561,19 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     }
   },
 
-  unlinkAsset: async (assetId) => {
+  unlinkAsset: async (assetId, reason) => {
     const assignment = get().getActiveAssignment(assetId);
-    await inventoryApi.unlinkAsset(assetId, getCurrentUsername() || undefined);
+    await inventoryApi.unlinkAsset(assetId, reason);
     await get().refreshAll();
     if (assignment) {
       await get().loadStationHistory(assignment.stationId);
     }
   },
 
-  transferAsset: async (assetId, toStationId) => {
+  transferAsset: async (assetId, toStationId, reason) => {
     try {
       const current = get().getActiveAssignment(assetId);
-      await inventoryApi.transferAsset(assetId, { toStationId: Number(toStationId), performedBy: getCurrentUsername() || undefined });
+      await inventoryApi.transferAsset(assetId, { toStationId: Number(toStationId), reason });
       await get().refreshAll();
       if (current) await get().loadStationHistory(current.stationId);
       await get().loadStationHistory(toStationId);
@@ -455,7 +598,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       await get().refreshAll().catch(() => {
         toast.warning('Conferência salva. Não foi possível atualizar o inventário; recarregue a tela para ver a localização atual.');
       });
-      return { ok: true };
+      return { ok: true, checkId: saved.id };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : 'Erro ao registrar conferência' };
     }
@@ -474,12 +617,15 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       if (!layout?.elements) return [];
       return layout.elements
         .filter((el) => el.id !== '_empty')
-        .map((el) => ({
+        .map((el) => convertLegacyWall(alignStructureToGrid(normalizeLegacyWallRotation({
           id: el.id,
           kind: ((el.metadata?.kind as FurnitureKind) ?? elementTypeToKind(el.elementType)),
           x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation || 0,
           label: el.label || undefined,
-        }));
+          assetKey: (el.metadata?.assetKey as string) || undefined,
+          points: Array.isArray(el.metadata?.points) ? (el.metadata!.points as number[][]) : undefined,
+          thickness: typeof el.metadata?.thickness === 'number' ? (el.metadata!.thickness as number) : undefined,
+        }))));
     } catch { return []; }
   },
 
@@ -489,9 +635,10 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     const elements = list.map((f, i) => ({
       id: f.id,
       elementType: kindToElementType(f.kind),
-      layer: f.kind === 'wall' || f.kind === 'partition' ? 'structural' : f.kind === 'label' ? 'labels' : 'furniture',
+      layer: isStructuralFurniture(f.kind) ? 'structural' : f.kind === 'label' ? 'labels' : 'furniture',
       x: Math.round(f.x), y: Math.round(f.y), width: Math.round(f.width), height: Math.round(f.height),
-      rotation: Math.round(f.rotation), label: f.label, zIndex: i, metadata: { kind: f.kind },
+      rotation: Math.round(f.rotation), label: f.label, zIndex: i,
+      metadata: { kind: f.kind, assetKey: f.assetKey, ...(f.points ? { points: f.points, thickness: f.thickness } : {}) },
     })) as ApiLayoutElement[];
     await inventoryApi.saveLayout(spaceId, {
       id: '', name: space?.name || 'Ambiente', code: `ENV-${spaceId}`,

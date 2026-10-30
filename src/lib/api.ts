@@ -62,6 +62,7 @@ export interface Employee {
   fullName: string;
   cpf: string | null;
   email: string | null;
+  jobTitle: string | null;
   status: EmployeeStatus;
   department: Department | null;
   username: string | null;

@@ -1424,6 +1424,7 @@ function ConfigPage({ view }: { view: View }) {
     fullName: "",
     cpf: "",
     email: "",
+    jobTitle: "",
     username: "",
     status: "ACTIVE" as Employee["status"],
     departmentId: "",
@@ -1502,6 +1503,7 @@ function ConfigPage({ view }: { view: View }) {
       fullName: employee.fullName,
       cpf: employee.cpf ?? "",
       email: employee.email ?? "",
+      jobTitle: employee.jobTitle ?? "",
       username: employee.username ?? "",
       status: employee.status,
       departmentId: employee.department?.id ?? "",
@@ -1514,7 +1516,7 @@ function ConfigPage({ view }: { view: View }) {
   }
 
   function clearEmployeeForm() {
-    setEmployeeForm({ id: "", fullName: "", cpf: "", email: "", username: "", status: "ACTIVE", departmentId: "", stationId: "", role: "usuario", password: "", passwordConfirmation: "" });
+    setEmployeeForm({ id: "", fullName: "", cpf: "", email: "", jobTitle: "", username: "", status: "ACTIVE", departmentId: "", stationId: "", role: "usuario", password: "", passwordConfirmation: "" });
   }
 
   function openNewEmployeeModal() {
@@ -1551,6 +1553,7 @@ function ConfigPage({ view }: { view: View }) {
       fullName: employeeForm.fullName.trim(),
       cpf: employeeForm.cpf.trim() || null,
       email: employeeForm.email.trim() || null,
+      jobTitle: employeeForm.jobTitle.trim() || null,
       username: employeeForm.username.trim() || null,
       status: employeeForm.status,
       departmentId: employeeForm.departmentId || null,
@@ -1624,7 +1627,7 @@ function ConfigPage({ view }: { view: View }) {
               id: employee.id,
               label: `${employee.fullName}${employee.username ? ` (${employee.username})` : ""}`,
               active: employee.status === "ACTIVE",
-              detail: `${employee.department?.name ?? "Sem departamento"}${employee.email ? ` · ${employee.email}` : ""}${stationLabel(inventoryEmployees.find((item) => item.id === employee.id)?.stationId, stations)}`,
+              detail: `${employee.jobTitle || "Cargo não informado"} · ${employee.department?.name ?? "Sem departamento"}${employee.email ? ` · ${employee.email}` : ""}${stationLabel(inventoryEmployees.find((item) => item.id === employee.id)?.stationId, stations)}`,
               onEdit: () => editEmployee(employee),
               onToggle: () => {
                 void api<Employee>(`/employees/${employee.id}`, {
@@ -1677,6 +1680,9 @@ function ConfigPage({ view }: { view: View }) {
               </FormField>
               <FormField label="CPF" hint="Opcional">
                 <input value={employeeForm.cpf} onChange={(event) => setEmployeeForm((current) => ({ ...current, cpf: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder="CPF" />
+              </FormField>
+              <FormField label="Cargo / função" hint="Usado nos termos patrimoniais">
+                <input value={employeeForm.jobTitle} onChange={(event) => setEmployeeForm((current) => ({ ...current, jobTitle: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]" placeholder="Ex.: Escrevente" />
               </FormField>
               <FormField label="Departamento">
                 <select value={employeeForm.departmentId} onChange={(event) => setEmployeeForm((current) => ({ ...current, departmentId: event.target.value }))} className="h-11 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-[#00234B]">

@@ -76,7 +76,8 @@ Depois acesse:
 | API do Portal | `http://localhost:8081/api` |
 | Inventario | `http://localhost:8082` |
 | API do Inventario | `http://localhost:8083/api/v1` |
-| PostgreSQL | `localhost:5432` |
+| PostgreSQL | `localhost:8084` |
+| Inventario HTTPS (PWA) | `https://localhost:8085` |
 
 Para acessar a partir de outra maquina da mesma rede, use o IP do servidor Docker:
 
@@ -103,6 +104,8 @@ O `docker-compose.yml` sobe:
 - `frontend`: Portal servido por Nginx na porta 8080
 - `inventory-backend`: API do Inventario exposta na porta 8083
 - `inventory-frontend`: Inventario servido por Nginx na porta 8082
+- `postgres`: PostgreSQL publicado no host na porta 8084
+- `caddy`: HTTPS do Inventario publicado no host na porta 8085
 
 ## Banco unificado
 

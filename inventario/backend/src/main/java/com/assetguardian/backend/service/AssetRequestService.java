@@ -27,7 +27,7 @@ public class AssetRequestService {
         return requestRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toResponse).toList();
     }
 
-    public AssetRequestResponse create(AssetRequestCreateRequest request) {
+    public AssetRequestResponse create(AssetRequestCreateRequest request, String actor) {
         AssetRequest entity = new AssetRequest();
         entity.setNumber(nextNumber());
         entity.setType(request.type());
@@ -35,31 +35,31 @@ public class AssetRequestService {
         entity.setStatus(AssetRequestStatus.PENDING);
         entity.setTitle(request.title().trim());
         entity.setDescription(request.description().trim());
-        entity.setRequestedBy(blankToNull(request.requestedBy()));
+        entity.setRequestedBy(blankToNull(actor));
         entity.setDepartment(blankToNull(request.department()));
         return toResponse(requestRepository.save(entity));
     }
 
-    public AssetRequestResponse approve(Long id, AssetRequestDecisionRequest request) {
-        return decide(id, AssetRequestStatus.APPROVED, request);
+    public AssetRequestResponse approve(Long id, AssetRequestDecisionRequest request, String actor) {
+        return decide(id, AssetRequestStatus.APPROVED, request, actor);
     }
 
-    public AssetRequestResponse reject(Long id, AssetRequestDecisionRequest request) {
-        return decide(id, AssetRequestStatus.REJECTED, request);
+    public AssetRequestResponse reject(Long id, AssetRequestDecisionRequest request, String actor) {
+        return decide(id, AssetRequestStatus.REJECTED, request, actor);
     }
 
-    public AssetRequestResponse cancel(Long id, AssetRequestDecisionRequest request) {
-        return decide(id, AssetRequestStatus.CANCELLED, request);
+    public AssetRequestResponse cancel(Long id, AssetRequestDecisionRequest request, String actor) {
+        return decide(id, AssetRequestStatus.CANCELLED, request, actor);
     }
 
-    private AssetRequestResponse decide(Long id, AssetRequestStatus status, AssetRequestDecisionRequest request) {
+    private AssetRequestResponse decide(Long id, AssetRequestStatus status, AssetRequestDecisionRequest request, String actor) {
         AssetRequest entity = requireRequest(id);
         if (entity.getStatus() != AssetRequestStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solicitacao ja foi decidida");
         }
         entity.setStatus(status);
         entity.setDecisionNote(request == null ? null : blankToNull(request.note()));
-        entity.setDecidedBy(request == null ? null : blankToNull(request.username()));
+        entity.setDecidedBy(blankToNull(actor));
         entity.setDecidedAt(LocalDateTime.now());
         return toResponse(entity);
     }

@@ -9,4 +9,8 @@ public interface EquipmentExchangeTermRepository extends JpaRepository<Equipment
     long countByNumberStartingWith(String prefix);
 
     List<EquipmentExchangeTerm> findAllByOrderByCreatedAtDesc();
+
+    List<EquipmentExchangeTerm> findByRetiredAssetIdInOrDeliveredAssetIdIn(List<Long> retiredAssetIds, List<Long> deliveredAssetIds);
+
+    boolean existsByRetiredAssetIdOrDeliveredAssetId(Long retiredAssetId, Long deliveredAssetId);
 }

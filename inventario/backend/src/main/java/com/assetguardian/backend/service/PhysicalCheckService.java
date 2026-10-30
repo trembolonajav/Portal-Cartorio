@@ -1,5 +1,7 @@
 package com.assetguardian.backend.service;
 
+import com.assetguardian.backend.api.dto.ConferenceFinalizationResponse;
+import com.assetguardian.backend.api.dto.PhysicalCheckPhotoResponse;
 import com.assetguardian.backend.api.dto.PhysicalCheckRequest;
 import com.assetguardian.backend.api.dto.PhysicalCheckResponse;
 import com.assetguardian.backend.api.dto.TransferAssetRequest;
@@ -13,10 +15,13 @@ import com.assetguardian.backend.domain.PhysicalCheck;
 import com.assetguardian.backend.domain.Station;
 import com.assetguardian.backend.repository.AssetAssignmentRepository;
 import com.assetguardian.backend.repository.AssetRepository;
+import com.assetguardian.backend.repository.PhysicalCheckPhotoRepository;
 import com.assetguardian.backend.repository.PhysicalCheckRepository;
 import com.assetguardian.backend.repository.StationRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,17 +35,20 @@ public class PhysicalCheckService {
     private final AssetRepository assetRepository;
     private final StationRepository stationRepository;
     private final PhysicalCheckRepository physicalCheckRepository;
+    private final PhysicalCheckPhotoRepository physicalCheckPhotoRepository;
     private final AssetAssignmentRepository assetAssignmentRepository;
     private final InventoryCommandService inventoryCommandService;
 
     public PhysicalCheckService(AssetRepository assetRepository, StationRepository stationRepository,
                                 PhysicalCheckRepository physicalCheckRepository,
+                                PhysicalCheckPhotoRepository physicalCheckPhotoRepository,
                                 AssetAssignmentRepository assetAssignmentRepository,
                                 InventoryCommandService inventoryCommandService, ConferenceFinalizationRepository finalizationRepository) {
         this.finalizationRepository = finalizationRepository;
         this.assetRepository = assetRepository;
         this.stationRepository = stationRepository;
         this.physicalCheckRepository = physicalCheckRepository;
+        this.physicalCheckPhotoRepository = physicalCheckPhotoRepository;
         this.assetAssignmentRepository = assetAssignmentRepository;
         this.inventoryCommandService = inventoryCommandService;
     }
@@ -84,7 +92,7 @@ public class PhysicalCheckService {
         asset.setLastCheckResult(request.result());
         assetRepository.save(asset);
 
-        return toResponse(check);
+        return toResponse(check, List.of());
     }
 
     public void finalizeStationConference(Long stationId, String username) {
@@ -102,14 +110,30 @@ public class PhysicalCheckService {
 
     @Transactional(readOnly = true)
     public List<PhysicalCheckResponse> history(Long assetId) {
-        return physicalCheckRepository.findByAssetIdOrderByCheckedAtDesc(assetId).stream()
-            .map(this::toResponse).toList();
+        return toResponses(physicalCheckRepository.findByAssetIdOrderByCheckedAtDesc(assetId));
     }
 
     @Transactional(readOnly = true)
     public List<PhysicalCheckResponse> stationHistory(Long stationId) {
-        return physicalCheckRepository.findByStationIdOrExpectedStationIdOrderByCheckedAtDesc(stationId, stationId)
-            .stream().map(this::toResponse).toList();
+        return toResponses(physicalCheckRepository.findByStationIdOrExpectedStationIdOrderByCheckedAtDesc(stationId, stationId));
+    }
+
+    /** Painel de auditoria: busca conferências com filtros opcionais. */
+    @Transactional(readOnly = true)
+    public List<PhysicalCheckResponse> search(Long stationId, CheckResult result, String checkedBy,
+                                              LocalDateTime from, LocalDateTime to) {
+        String needle = blankToNull(checkedBy);
+        String lower = needle == null ? null : needle.toLowerCase();
+        List<PhysicalCheck> checks = physicalCheckRepository.findAllByOrderByCheckedAtDesc().stream()
+            .filter(c -> stationId == null
+                || (c.getStation() != null && stationId.equals(c.getStation().getId()))
+                || (c.getExpectedStation() != null && stationId.equals(c.getExpectedStation().getId())))
+            .filter(c -> result == null || c.getResult() == result)
+            .filter(c -> from == null || (c.getCheckedAt() != null && !c.getCheckedAt().isBefore(from)))
+            .filter(c -> to == null || (c.getCheckedAt() != null && !c.getCheckedAt().isAfter(to)))
+            .filter(c -> lower == null || (c.getCheckedBy() != null && c.getCheckedBy().toLowerCase().contains(lower)))
+            .toList();
+        return toResponses(checks);
     }
 
     @Transactional(readOnly = true)
@@ -119,7 +143,36 @@ public class PhysicalCheckService {
             .toList();
     }
 
-    private PhysicalCheckResponse toResponse(PhysicalCheck c) {
+    /** Painel de auditoria: todas as finalizações de estação, mais recentes primeiro. */
+    @Transactional(readOnly = true)
+    public List<ConferenceFinalizationResponse> allFinalizations() {
+        return finalizationRepository.findAllByOrderByCheckedAtDesc().stream()
+            .map(f -> new ConferenceFinalizationResponse(
+                f.getId(),
+                f.getStation() == null ? null : f.getStation().getId(),
+                f.getStation() == null ? null : f.getStation().getCode(),
+                f.getStation() == null ? null : f.getStation().getName(),
+                f.getCheckedBy(),
+                f.getCheckedAt()))
+            .toList();
+    }
+
+    private List<PhysicalCheckResponse> toResponses(List<PhysicalCheck> checks) {
+        if (checks.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = checks.stream().map(PhysicalCheck::getId).toList();
+        Map<Long, List<PhysicalCheckPhotoResponse>> photosByCheck = physicalCheckPhotoRepository
+            .findByPhysicalCheckIdInOrderByUploadedAt(ids).stream()
+            .collect(Collectors.groupingBy(
+                p -> p.getPhysicalCheck().getId(),
+                Collectors.mapping(PhysicalCheckPhotoResponse::from, Collectors.toList())));
+        return checks.stream()
+            .map(c -> toResponse(c, photosByCheck.getOrDefault(c.getId(), List.of())))
+            .toList();
+    }
+
+    private PhysicalCheckResponse toResponse(PhysicalCheck c, List<PhysicalCheckPhotoResponse> photos) {
         Station st = c.getStation();
         Station ex = c.getExpectedStation();
         return new PhysicalCheckResponse(
@@ -135,7 +188,8 @@ public class PhysicalCheckService {
             c.getDivergenceType(),
             c.getNote(),
             c.getCheckedBy(),
-            c.getCheckedAt()
+            c.getCheckedAt(),
+            photos
         );
     }
 

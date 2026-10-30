@@ -5,7 +5,7 @@ server:
 
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cart_rio_hub}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:8084/cart_rio_hub}
     username: ${SPRING_DATASOURCE_USERNAME:cart_rio}
     password: ${SPRING_DATASOURCE_PASSWORD:cart_rio}
   jpa:

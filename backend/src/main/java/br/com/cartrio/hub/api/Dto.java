@@ -20,9 +20,9 @@ public class Dto {
   public record LoginResponse(UserDto user) {}
   public record UserDto(UUID id, String username, String nomeCompleto, String email, Set<AppRole> roles, EmployeeDto employee) {}
   public record DepartmentDto(UUID id, String name, boolean active) {}
-  public record EmployeeDto(UUID id, String fullName, String cpf, String email, EmployeeStatus status, DepartmentDto department, String username, AppRole role) {}
+  public record EmployeeDto(UUID id, String fullName, String cpf, String email, String jobTitle, EmployeeStatus status, DepartmentDto department, String username, AppRole role) {}
   public record DepartmentRequest(String name, Boolean active) {}
-  public record EmployeeRequest(String fullName, String cpf, String email, EmployeeStatus status, UUID departmentId, AppRole role, String username, String password) {}
+  public record EmployeeRequest(String fullName, String cpf, String email, String jobTitle, EmployeeStatus status, UUID departmentId, AppRole role, String username, String password) {}
   public record SetorDto(UUID id, String nome, boolean ativo) {}
   public record CategoriaDto(UUID id, String nome, boolean ativo) {}
   public record TicketCreate(String titulo, String descricao, TicketPriority prioridade, UUID categoriaId, UUID setorId, UUID criadoPorId, String anexos, String equipamentoRelacionado) {}
@@ -69,7 +69,7 @@ public class Dto {
   public static EmployeeDto employee(Employee employee, UserAccount account) {
     if (employee == null) return null;
     AppRole role = account == null || account.getRoles().isEmpty() ? AppRole.usuario : account.getRoles().iterator().next();
-    return new EmployeeDto(employee.getId(), employee.getFullName(), employee.getCpf(), employee.getEmail(), employee.getStatus(), department(employee.getDepartment()), account == null ? null : account.getUsername(), role);
+    return new EmployeeDto(employee.getId(), employee.getFullName(), employee.getCpf(), employee.getEmail(), employee.getJobTitle(), employee.getStatus(), department(employee.getDepartment()), account == null ? null : account.getUsername(), role);
   }
 
   public static SetorDto setor(Setor setor) {

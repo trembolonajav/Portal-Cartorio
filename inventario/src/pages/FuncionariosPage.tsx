@@ -24,7 +24,33 @@ const FuncionariosPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const rows = useMemo(() => employees.filter((employee) => [employee.fullName, employee.cpf, departments.find((item) => item.id === employee.departmentId)?.name].some((value) => value?.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR")))), [employees, departments, query]);
+  const rows = useMemo(() => {
+    const normalizedQuery = query.toLocaleLowerCase("pt-BR");
+    const departmentById = new Map(departments.map((department) => [department.id, department.name]));
+    const stationById = new Map(stations.map((station) => [station.id, station.code]));
+    const compare = (left: string, right: string) => left.localeCompare(right, "pt-BR", { numeric: true, sensitivity: "base" });
+
+    return employees
+      .filter((employee) => [employee.fullName, employee.cpf, departmentById.get(employee.departmentId || "")]
+        .some((value) => value?.toLocaleLowerCase("pt-BR").includes(normalizedQuery)))
+      .sort((left, right) => {
+        const leftDepartment = departmentById.get(left.departmentId || "");
+        const rightDepartment = departmentById.get(right.departmentId || "");
+        if (!leftDepartment && rightDepartment) return 1;
+        if (leftDepartment && !rightDepartment) return -1;
+
+        const byDepartment = compare(leftDepartment || "", rightDepartment || "");
+        if (byDepartment !== 0) return byDepartment;
+
+        const leftStation = stationById.get(left.stationId || "");
+        const rightStation = stationById.get(right.stationId || "");
+        if (!leftStation && rightStation) return 1;
+        if (leftStation && !rightStation) return -1;
+
+        const byStation = compare(leftStation || "", rightStation || "");
+        return byStation !== 0 ? byStation : compare(left.fullName, right.fullName);
+      });
+  }, [employees, departments, stations, query]);
   const activeCount = employees.filter((employee) => employee.status === "ACTIVE").length;
   const getDepartment = (id?: string) => id ? departments.find((item) => item.id === id)?.name ?? "Sem departamento" : "Sem departamento";
   const getStation = (id?: string) => id ? stations.find((item) => item.id === id)?.code ?? "Sem estação" : "Sem estação";

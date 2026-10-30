@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { Asset, Station, FurnitureItem } from '@/features/inventory-map/types/inventoryMap.types';
 import EnvironmentLayer from './EnvironmentLayer';
+import WallLayer from './WallLayer';
+
+const makeFurnId = () => `f-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 /*
  * Mapa patrimonial ilustrado (artboard 4b).
@@ -34,6 +37,7 @@ interface Props {
   selectedFurnId?: string | null;
   onFurnitureChange?: (items: FurnitureItem[]) => void;
   onSelectFurn?: (id: string | null) => void;
+  wallDraw?: boolean;
 }
 
 const GRID = 20;
@@ -138,7 +142,7 @@ const TileBody = ({ st, kind, state, sub, assets, rot, animate }: { st: Station;
   </>
 );
 
-const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing = false, positions, rotations, onDragEnd, onRotate, onStationClick, furniture = [], selectedFurnId = null, onFurnitureChange, onSelectFurn }: Props) => {
+const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing = false, positions, rotations, onDragEnd, onRotate, onStationClick, furniture = [], selectedFurnId = null, onFurnitureChange, onSelectFurn, wallDraw = false }: Props) => {
   const allStations = useInventoryStore((s) => s.stations);
   const spaces = useInventoryStore((s) => s.spaces);
   const getEmployeeForStation = useInventoryStore((s) => s.getEmployeeForStation);
@@ -269,7 +273,7 @@ const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing 
 
   return (
     <div className="h-full overflow-auto p-6" style={{ background: '#F1EDE4', backgroundImage: 'linear-gradient(rgba(0,0,0,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.045) 1px, transparent 1px)', backgroundSize: '26px 26px' }}>
-      {stations.length === 0 ? (
+      {stations.length === 0 && !editing ? (
         <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
           <div className="mb-3 h-[94px] w-[170px] rounded-md border-2 border-dashed border-muted-foreground/40" />
           <p className="text-sm font-medium">Nenhuma estação neste mapa</p>
@@ -281,7 +285,19 @@ const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing 
           <div
             ref={canvasRef}
             className="relative"
-            style={{ width: canvasW, height: canvasH, ...(editing ? { backgroundImage: 'linear-gradient(rgba(0,35,75,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,35,75,.06) 1px, transparent 1px)', backgroundSize: `${GRID}px ${GRID}px` } : {}) }}
+            style={{
+              width: canvasW,
+              height: canvasH,
+              ...(editing ? {
+                backgroundImage: [
+                  'linear-gradient(rgba(0,35,75,.11) 1px, transparent 1px)',
+                  'linear-gradient(90deg, rgba(0,35,75,.11) 1px, transparent 1px)',
+                  'linear-gradient(rgba(0,35,75,.045) 1px, transparent 1px)',
+                  'linear-gradient(90deg, rgba(0,35,75,.045) 1px, transparent 1px)',
+                ].join(', '),
+                backgroundSize: `${GRID * 5}px ${GRID * 5}px, ${GRID * 5}px ${GRID * 5}px, ${GRID}px ${GRID}px, ${GRID}px ${GRID}px`,
+              } : {}),
+            }}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerUp}
@@ -289,6 +305,8 @@ const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing 
           >
             {/* Camada de mobília do ambiente, atrás das estações */}
             <EnvironmentLayer items={furniture} editing={editing} selectedId={selectedFurnId} onSelect={(id) => onSelectFurn?.(id)} onChange={(its) => onFurnitureChange?.(its)} canvasRef={canvasRef} />
+            {/* Paredes desenhadas por cantos (polilinha, emendas limpas + cotas) */}
+            <WallLayer furniture={furniture} editing={editing} wallDraw={wallDraw} selectedId={selectedFurnId} canvasW={canvasW} canvasH={canvasH} newId={makeFurnId} onSelect={(id) => onSelectFurn?.(id)} onChange={(its) => onFurnitureChange?.(its)} />
             {tiles.map(({ st, kind, state, sub, assets, rot, pos }) => (
               <div
                 key={st.id}
@@ -322,7 +340,8 @@ const IllustratedMap = ({ search = '', activeSpaceName, spaceId = null, editing 
             <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-[3px] border-2 border-[#8A6E32]" />Resultado da busca</span>
             <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-[3px] border-2 border-[#B4342B]" />Requer atenção</span>
             <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-[3px] border-2 border-dashed border-[#B9B3A9]" />Vaga livre</span>
-            {editing && <span className="text-[#8A6E32]">Arraste para posicionar · botão girar muda o lado · a planta cresce conforme você espalha</span>}
+            {editing && !wallDraw && <span className="text-[#8A6E32]">Grade: 1 quadrado = 20 px · paredes e portas encaixam nas linhas · a planta cresce conforme você espalha</span>}
+            {editing && wallDraw && <span className="text-[#8A6E32]">Clique em cada canto da parede · Shift libera o ângulo · Enter, duplo clique ou botão direito conclui · clique no 1º ponto fecha a sala · Esc sai</span>}
           </div>
         </div>
       )}

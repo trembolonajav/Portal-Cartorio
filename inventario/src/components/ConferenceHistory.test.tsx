@@ -16,10 +16,10 @@ afterEach(cleanup);
 it('shows saved checks, missing items, original location, author, notes and movements', async () => {
   vi.mocked(inventoryApi.stationChecks).mockResolvedValue([{
     id: 1, assetId: 1, assetCode: 'P001', assetDescription: 'Monitor', stationId: 3, stationCode: 'B', expectedStationId: 2,
-    expectedStationCode: 'A', result: 'DIVERGENCE', divergenceType: 'WRONG_LOCATION', note: 'Transferido durante conferência', checkedBy: 'maria', checkedAt: '2026-09-11T10:00:00',
+    expectedStationCode: 'A', result: 'DIVERGENCE', divergenceType: 'WRONG_LOCATION', note: 'Transferido durante conferência', checkedBy: 'maria', checkedAt: '2026-09-11T10:00:00', photos: [],
   }, {
     id: 2, assetId: 2, assetCode: 'P002', assetDescription: 'Mouse', stationId: 3, stationCode: 'B', expectedStationId: 3,
-    expectedStationCode: 'B', result: 'NOT_FOUND', divergenceType: null, note: null, checkedBy: 'joao', checkedAt: '2026-09-11T09:00:00',
+    expectedStationCode: 'B', result: 'NOT_FOUND', divergenceType: null, note: null, checkedBy: 'joao', checkedAt: '2026-09-11T09:00:00', photos: [],
   }]);
   render(<ConferenceHistory stationId="3" movements />);
   expect(await screen.findByText('P001 · Divergência')).toBeInTheDocument();

@@ -5,10 +5,12 @@ import {
   Map as MapIcon,
   LayoutGrid,
   ArrowLeftRight,
+  ClipboardCheck,
   FileMinus2,
   Archive,
   Shapes,
   Upload,
+  SlidersHorizontal,
   Building2,
   Users,
   Search,
@@ -29,9 +31,11 @@ type NavKey =
   | "departamentos"
   | "funcionarios"
   | "movimentacoes"
+  | "conferencias"
   | "baixas"
   | "arquivo"
-  | "importar";
+  | "importar"
+  | "politica";
 
 interface NavItem {
   key: NavKey;
@@ -85,9 +89,11 @@ const AppShell = ({ active, actions, search, children }: AppShellProps) => {
     { key: "catalogo", label: "Catálogo", to: "/catalogo", icon: Shapes },
     { key: "departamentos", label: "Departamentos", to: "/departamentos", icon: Building2 },
     { key: "funcionarios", label: "Funcionários", to: "/funcionarios", icon: Users, count: employeeCount || undefined },
-    { key: "movimentacoes", label: "Movimentações", to: "#", icon: ArrowLeftRight, disabled: true },
+    { key: "movimentacoes", label: "Movimentações", to: "/movimentacoes", icon: ArrowLeftRight },
+    { key: "conferencias", label: "Conferências", to: "/conferencias", icon: ClipboardCheck },
     { key: "baixas", label: "Baixas patrimoniais", to: "/baixas-patrimoniais", icon: FileMinus2, count: disposedCount || undefined },
-    { key: "arquivo", label: "Arquivo", to: "/arquivo", icon: Archive, adminOnly: true },
+    { key: "arquivo", label: "Arquivo", to: "/arquivo", icon: Archive },
+    { key: "politica", label: "Política patrimonial", to: "/configuracoes/politica-patrimonial", icon: SlidersHorizontal, adminOnly: true },
     { key: "importar", label: "Importar planilha", to: "/importar", icon: Upload, adminOnly: true },
   ];
 

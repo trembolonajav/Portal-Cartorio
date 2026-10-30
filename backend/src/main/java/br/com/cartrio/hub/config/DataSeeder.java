@@ -130,7 +130,7 @@ public class DataSeeder implements CommandLineRunner {
   }
 
   private Employee employee(int id, String fullName, String email, Department department) {
-    return employees.findById(id(id)).orElseGet(() -> employees.save(new Employee(id(id), fullName, null, email, EmployeeStatus.ACTIVE, department)));
+    return employees.findById(id(id)).orElseGet(() -> employees.save(new Employee(id(id), fullName, null, email, null, EmployeeStatus.ACTIVE, department)));
   }
 
   private void linkEmployee(UserAccount user, Employee employee) {

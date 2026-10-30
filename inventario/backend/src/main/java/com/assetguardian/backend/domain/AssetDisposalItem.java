@@ -3,6 +3,8 @@ package com.assetguardian.backend.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -55,4 +57,23 @@ public class AssetDisposalItem extends BaseEntity {
 
     @Column(name = "origin_snapshot", nullable = false, length = 30)
     private String originSnapshot;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_reason", length = 40)
+    private AssetDisposalReason itemReason;
+
+    @Column(name = "physical_condition", length = 120)
+    private String physicalCondition;
+
+    @Column(name = "evaluation_description", length = 2000)
+    private String evaluationDescription;
+
+    @Column(name = "technical_notes", length = 2000)
+    private String technicalNotes;
+
+    @Column(name = "requires_data_sanitization", nullable = false)
+    private boolean requiresDataSanitization;
+
+    @Column(name = "data_sanitization_completed", nullable = false)
+    private boolean dataSanitizationCompleted;
 }

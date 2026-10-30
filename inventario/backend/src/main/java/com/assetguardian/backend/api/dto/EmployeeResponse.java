@@ -7,6 +7,7 @@ public record EmployeeResponse(
     UUID id,
     String fullName,
     String cpf,
+    String jobTitle,
     EmployeeStatus status,
     UUID departmentId,
     String departmentName,

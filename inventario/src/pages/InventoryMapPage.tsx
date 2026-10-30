@@ -10,27 +10,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import { inventoryApi } from '@/lib/inventory-api';
-import type { SpaceType, StationStatus, FurnitureItem, FurnitureKind } from '@/features/inventory-map/types/inventoryMap.types';
+import type { SpaceType, StationStatus, FurnitureItem } from '@/features/inventory-map/types/inventoryMap.types';
+import {
+  BASIC_ENVIRONMENT_ITEMS,
+  CUSTOM_FURNITURE_ITEMS,
+  WALL_MODULE_ITEMS,
+  type EnvironmentPaletteItem,
+} from '@/features/inventory-map/data/environmentAssetLibrary';
 import { toast } from 'sonner';
 
 const SPACE_TYPE_LABELS: Record<SpaceType, string> = { UNIT: 'Unidade', BUILDING: 'Prédio', FLOOR: 'Andar', SECTOR: 'Departamento' };
 const emptyStation = { code: '', name: '', status: 'ACTIVE' as StationStatus };
 const defaultPos = (idx: number) => ({ x: 30 + (idx % 4) * 230, y: 60 + Math.floor(idx / 4) * 210 });
 
-// Paleta de mobília (só visual, atrás das estações).
-// Tamanhos default proporcionais à escala do mapa (mesa/estação ~170px).
-const FURN_PALETTE: { kind: FurnitureKind; label: string; w: number; h: number }[] = [
-  { kind: 'wall', label: 'Parede', w: 240, h: 12 },
-  { kind: 'partition', label: 'Divisória', w: 180, h: 10 },
-  { kind: 'cabinet', label: 'Armário', w: 150, h: 46 },
-  { kind: 'meeting', label: 'Mesa reunião', w: 200, h: 130 },
-  { kind: 'printer', label: 'Impressora', w: 46, h: 40 },
-  { kind: 'mfp', label: 'Multifuncional', w: 60, h: 56 },
-  { kind: 'phone', label: 'Telefone', w: 30, h: 28 },
-  { kind: 'label', label: 'Rótulo', w: 140, h: 26 },
-];
 const newFurnId = () => `f-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 const InventoryMapPage = () => {
@@ -62,6 +57,8 @@ const InventoryMapPage = () => {
   const [savingLayout, setSavingLayout] = useState(false);
   const [furniture, setFurniture] = useState<FurnitureItem[]>([]);
   const [selectedFurn, setSelectedFurn] = useState<string | null>(null);
+  const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
+  const [wallDraw, setWallDraw] = useState(false);
 
   // Mobília do ambiente por departamento (some no "Todos os espaços").
   useEffect(() => {
@@ -97,16 +94,27 @@ const InventoryMapPage = () => {
     setSheetStationId(null);
   };
   const cancelEdit = () => {
-    setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null);
+    setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null); setWallDraw(false);
     if (activeMap !== 'all') loadFurniture(activeMap).then(setFurniture);
   };
   const rotate = (id: string) => setRotations((r) => ({ ...r, [id]: ((r[id] ?? 0) + 90) % 360 }));
 
   // Mobília
-  const addFurniture = (kind: FurnitureKind) => {
-    const spec = FURN_PALETTE.find((p) => p.kind === kind)!;
+  const addFurniture = (spec: EnvironmentPaletteItem) => {
     const id = newFurnId();
-    setFurniture((f) => [...f, { id, kind, x: 40, y: 40, width: spec.w, height: spec.h, rotation: 0, label: kind === 'label' ? 'SALA' : undefined }]);
+    const initialX = 40;
+    const initialY = spec.kind === 'wall' ? 40 - spec.h / 2 : 40;
+    setFurniture((f) => [...f, {
+      id,
+      kind: spec.kind,
+      x: initialX,
+      y: initialY,
+      width: spec.w,
+      height: spec.h,
+      rotation: 0,
+      label: spec.kind === 'label' ? 'SALA' : spec.label,
+      assetKey: spec.assetKey,
+    }]);
     setSelectedFurn(id);
   };
   const setFurnLabel = (text: string) => setFurniture((f) => f.map((it) => (it.id === selectedFurn ? { ...it, label: text } : it)));
@@ -126,7 +134,7 @@ const InventoryMapPage = () => {
       if (activeMap !== 'all') await saveFurniture(activeMap, furniture);
       await refreshAll();
       toast.success('Planta salva');
-      setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null);
+      setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null); setWallDraw(false);
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao salvar planta'); }
     finally { setSavingLayout(false); }
   };
@@ -182,10 +190,23 @@ const InventoryMapPage = () => {
 
           {editing ? (
             <div className="flex flex-1 flex-wrap items-center gap-1.5">
+              <Button
+                size="sm"
+                variant={wallDraw ? 'default' : 'outline'}
+                className={`h-8 px-2.5 text-[12px] ${wallDraw ? '' : 'border-brass/60 text-brass-ink'}`}
+                onClick={() => { setWallDraw((v) => !v); setSelectedFurn(null); }}
+                title="Desenhe paredes clicando em cada canto; elas se emendam e mostram as metragens"
+              >
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />{wallDraw ? 'Desenhando parede…' : 'Desenhar parede'}
+              </Button>
+              <span className="mx-1 h-5 w-px bg-border" />
               <span className="mr-1 text-[12px] font-medium text-muted-foreground">Mobília:</span>
-              {FURN_PALETTE.map((p) => (
-                <Button key={p.kind} size="sm" variant="outline" className="h-8 px-2 text-[12px]" onClick={() => addFurniture(p.kind)}>+ {p.label}</Button>
+              {BASIC_ENVIRONMENT_ITEMS.filter((p) => p.kind !== 'wall').map((p) => (
+                <Button key={p.id} size="sm" variant="outline" className="h-8 px-2 text-[12px]" onClick={() => addFurniture(p)}>+ {p.label}</Button>
               ))}
+              <Button size="sm" variant="outline" className="h-8 border-brass/60 px-2 text-[12px] text-brass-ink" onClick={() => setAssetLibraryOpen(true)}>
+                <Boxes className="mr-1.5 h-3.5 w-3.5" />Biblioteca de ambiente
+              </Button>
               {selectedFurnItem?.kind === 'label' && (
                 <Input value={selectedFurnItem.label ?? ''} onChange={(e) => setFurnLabel(e.target.value)} placeholder="Nome da sala" className="h-8 w-36 text-xs" />
               )}
@@ -195,7 +216,7 @@ const InventoryMapPage = () => {
           ) : (
             <>
               <Button size="sm" variant="outline" className="h-9" onClick={() => setMapOpen(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Novo mapa</Button>
-              <Button size="sm" variant="outline" className="ml-auto h-9" onClick={enterEdit} disabled={visibleStations.length === 0 || activeMap === 'all'} title={activeMap === 'all' ? 'Selecione um mapa para editar a planta' : undefined}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar planta</Button>
+              <Button size="sm" variant="outline" className="ml-auto h-9" onClick={enterEdit} disabled={activeMap === 'all'} title={activeMap === 'all' ? 'Selecione um mapa para editar a planta' : undefined}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar planta</Button>
               <Button size="sm" className="h-9" onClick={openNewStation}><Plus className="mr-1.5 h-3.5 w-3.5" />Nova estação</Button>
             </>
           )}
@@ -216,11 +237,75 @@ const InventoryMapPage = () => {
             selectedFurnId={selectedFurn}
             onFurnitureChange={setFurniture}
             onSelectFurn={setSelectedFurn}
+            wallDraw={wallDraw}
           />
         </div>
       </div>
 
       {sheetStationId && <StationSheet stationId={sheetStationId} onClose={() => setSheetStationId(null)} />}
+
+      {/* Biblioteca de móveis e módulos estruturais */}
+      <Dialog open={assetLibraryOpen} onOpenChange={setAssetLibraryOpen}>
+        <DialogContent className="max-h-[88vh] sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Biblioteca de ambiente</DialogTitle>
+            <DialogDescription>Escolha um item para inserir no canto superior da planta. Depois, arraste, redimensione e gire livremente.</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[64vh] pr-4">
+            <div className="space-y-7 pb-3">
+              <section>
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Móveis</h3>
+                    <p className="text-xs text-muted-foreground">3 novos assets recortados e com fundo transparente</p>
+                  </div>
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">3 itens</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                  {CUSTOM_FURNITURE_ITEMS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { addFurniture(item); setAssetLibraryOpen(false); }}
+                      className="group rounded-xl border border-border bg-card p-3 text-left transition hover:border-brass hover:bg-brass/5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brass/50"
+                    >
+                      <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-border bg-paper-2 p-3">
+                        <img src={`/pack/ambiente/${item.assetKey}`} alt={item.label} className="max-h-full max-w-full object-contain transition-transform group-hover:scale-[1.03]" />
+                      </div>
+                      <span className="mt-2 block text-xs font-medium text-foreground">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Paredes modulares</h3>
+                    <p className="text-xs text-muted-foreground">Retas, cantos, curvas, junções e acabamentos independentes</p>
+                  </div>
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">36 módulos</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+                  {WALL_MODULE_ITEMS.map((item, index) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { addFurniture(item); setAssetLibraryOpen(false); }}
+                      className="group rounded-lg border border-border bg-card p-2 text-center transition hover:border-brass hover:bg-brass/5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brass/50"
+                    >
+                      <div className="flex h-20 items-center justify-center rounded-md bg-paper-2 p-2">
+                        <img src={`/pack/ambiente/${item.assetKey}`} alt={item.label} className="max-h-full max-w-full object-contain transition-transform group-hover:scale-105" />
+                      </div>
+                      <span className="mt-1.5 block text-[11px] font-medium text-muted-foreground">Módulo {String(index + 1).padStart(2, '0')}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* Novo mapa */}
       <Dialog open={mapOpen} onOpenChange={setMapOpen}>
@@ -258,7 +343,7 @@ const InventoryMapPage = () => {
               <div className="space-y-1.5"><Label className="text-xs">Situação</Label>
                 <Select value={stationForm.status} onValueChange={(v) => setStationForm((f) => ({ ...f, status: v as StationStatus }))}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="ACTIVE">Ativa</SelectItem><SelectItem value="INACTIVE">Inativa</SelectItem><SelectItem value="MAINTENANCE">Manutenção</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="ACTIVE">Ativa</SelectItem><SelectItem value="INACTIVE">Inativa</SelectItem><SelectItem value="MAINTENANCE">Em manutenção</SelectItem></SelectContent>
                 </Select>
               </div>
             </div>

@@ -8,5 +8,9 @@ public interface PhysicalCheckRepository extends JpaRepository<PhysicalCheck, Lo
 
     List<PhysicalCheck> findByAssetIdOrderByCheckedAtDesc(Long assetId);
 
+    boolean existsByAssetId(Long assetId);
+
     List<PhysicalCheck> findByStationIdOrExpectedStationIdOrderByCheckedAtDesc(Long stationId, Long expectedStationId);
+
+    List<PhysicalCheck> findAllByOrderByCheckedAtDesc();
 }

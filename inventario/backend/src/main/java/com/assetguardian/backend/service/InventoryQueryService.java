@@ -61,7 +61,19 @@ public class InventoryQueryService {
             null,
             null,
             null,
-            null
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            view.getVoidedAt(),
+            view.getVoidedBy(),
+            view.getVoidReason(),
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
         );
     }
 }

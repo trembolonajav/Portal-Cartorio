@@ -16,7 +16,8 @@ class PhysicalCheckServiceTest {
     private final AssetAssignmentRepository assignments = mock(AssetAssignmentRepository.class);
     private final InventoryCommandService commands = mock(InventoryCommandService.class);
     private final ConferenceFinalizationRepository finalizations = mock(ConferenceFinalizationRepository.class);
-    private final PhysicalCheckService service = new PhysicalCheckService(assets, stations, checks, assignments, commands, finalizations);
+    private final PhysicalCheckPhotoRepository checkPhotos = mock(PhysicalCheckPhotoRepository.class);
+    private final PhysicalCheckService service = new PhysicalCheckService(assets, stations, checks, checkPhotos, assignments, commands, finalizations);
 
     @Test void transferKeepsOriginalLocationAndAuthenticatedAuthor() {
         Asset asset = new Asset(); asset.setId(1L); asset.setAssetCode("P001");

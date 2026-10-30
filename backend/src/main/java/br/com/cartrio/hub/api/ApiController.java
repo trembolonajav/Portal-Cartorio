@@ -250,6 +250,7 @@ public class ApiController {
       requireText(request.fullName(), "Nome do funcionÃ¡rio Ã© obrigatÃ³rio"),
       blankToNull(request.cpf()),
       blankToNull(request.email()),
+      blankToNull(request.jobTitle()),
       request.status() == null ? EmployeeStatus.ACTIVE : request.status(),
       department
     );
@@ -267,6 +268,7 @@ public class ApiController {
     assertEmployeeIdentityAvailable(id, employee.getFullName(), request.cpf() == null ? employee.getCpf() : request.cpf(), request.email() == null ? employee.getEmail() : request.email());
     if (request.cpf() != null) employee.setCpf(blankToNull(request.cpf()));
     if (request.email() != null) employee.setEmail(blankToNull(request.email()));
+    if (request.jobTitle() != null) employee.setJobTitle(blankToNull(request.jobTitle()));
     if (request.status() != null) employee.setStatus(request.status());
     if (request.departmentId() != null) employee.setDepartment(findDepartment(request.departmentId()));
     Employee saved = employees.save(employee);

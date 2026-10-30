@@ -9,6 +9,7 @@ import java.util.List;
 
 public record AssetDisposalCreateRequest(
     List<Long> assetIds,
+    List<@Valid AssetDisposalItemAssessmentRequest> itemAssessments,
     List<@Valid AssetDisposalMaterialRequest> materials,
     @NotNull AssetDisposalReason reason,
     @NotBlank String destination,
@@ -20,6 +21,7 @@ public record AssetDisposalCreateRequest(
 ) {
     public AssetDisposalCreateRequest {
         assetIds = assetIds == null ? List.of() : List.copyOf(assetIds);
+        itemAssessments = itemAssessments == null ? List.of() : List.copyOf(itemAssessments);
         materials = materials == null ? List.of() : List.copyOf(materials);
     }
 }

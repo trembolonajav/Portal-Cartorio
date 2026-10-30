@@ -5,6 +5,7 @@ import com.assetguardian.backend.api.dto.AssetDisposalCreateRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalDocumentResponse;
 import com.assetguardian.backend.api.dto.AssetDisposalEventResponse;
 import com.assetguardian.backend.api.dto.AssetDisposalItemResponse;
+import com.assetguardian.backend.api.dto.AssetDisposalItemAssessmentRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalMaterialRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalMaterialResponse;
 import com.assetguardian.backend.api.dto.AssetDisposalResponse;
@@ -25,6 +26,11 @@ import com.assetguardian.backend.domain.Employee;
 import com.assetguardian.backend.domain.MovementType;
 import com.assetguardian.backend.domain.Station;
 import com.assetguardian.backend.domain.StationResponsibility;
+import com.assetguardian.backend.domain.ResponsibilityTerm;
+import com.assetguardian.backend.domain.ResponsibilityTermItem;
+import com.assetguardian.backend.domain.ResponsibilityTermStatus;
+import com.assetguardian.backend.repository.ResponsibilityTermItemRepository;
+import com.assetguardian.backend.repository.ResponsibilityTermRepository;
 import com.assetguardian.backend.repository.AssetAssignmentRepository;
 import com.assetguardian.backend.repository.AssetDisposalDocumentRepository;
 import com.assetguardian.backend.repository.AssetDisposalEventRepository;
@@ -45,7 +51,9 @@ import java.time.LocalDateTime;
 import java.time.Year;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -70,6 +78,14 @@ public class AssetDisposalService {
     private final AssetAssignmentRepository assignmentRepository;
     private final AssetMovementRepository movementRepository;
     private final StationResponsibilityRepository responsibilityRepository;
+    private final ResponsibilityTermItemRepository responsibilityTermItemRepository;
+    private final ResponsibilityTermRepository responsibilityTermRepository;
+
+    /** Termos de responsabilidade que ainda vinculam o bem ao responsavel (nao terminais). */
+    private static final Set<ResponsibilityTermStatus> OPEN_TERM_STATUSES = Set.of(
+        ResponsibilityTermStatus.DRAFT,
+        ResponsibilityTermStatus.WAITING_SIGNATURE,
+        ResponsibilityTermStatus.ACTIVE);
 
     public List<AssetDisposalResponse> list() {
         return disposalRepository.findAllByOrderByCreatedAtDesc().stream()
@@ -81,7 +97,22 @@ public class AssetDisposalService {
         return toResponse(requireDisposal(id), true);
     }
 
-    public AssetDisposalResponse create(AssetDisposalCreateRequest request) {
+    @Transactional(readOnly = true)
+    public List<Long> listOpenAssetIds() {
+        return itemRepository.findAssetIdsByDisposalStatusIn(OPEN_STATUSES);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AssetDisposalResponse> listForAsset(Long assetId) {
+        requireAsset(assetId);
+        return itemRepository.findByAsset_IdOrderByDisposal_CreatedAtDesc(assetId).stream()
+            .map(AssetDisposalItem::getDisposal)
+            .distinct()
+            .map(disposal -> toResponse(disposal, false))
+            .toList();
+    }
+
+    public AssetDisposalResponse create(AssetDisposalCreateRequest request, String actor) {
         if (request.assetIds().isEmpty() && request.materials().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inclua ao menos um patrimonio ou material sem patrimonio");
         }
@@ -92,13 +123,19 @@ public class AssetDisposalService {
         disposal.setDestination(request.destination().trim());
         disposal.setJustification(request.justification().trim());
         disposal.setNotes(blankToNull(request.notes()));
-        disposal.setRequestedBy(blankToNull(request.requestedBy()));
+        disposal.setRequestedBy(blankToNull(actor));
         disposal.setAuthorizedByName(request.authorizedByName().trim());
         disposal.setAuthorizationDate(request.authorizationDate() == null ? LocalDate.now() : request.authorizationDate());
         AssetDisposal saved = disposalRepository.save(disposal);
 
+        Map<Long, AssetDisposalItemAssessmentRequest> assessments = request.itemAssessments().stream()
+            .collect(java.util.stream.Collectors.toMap(
+                AssetDisposalItemAssessmentRequest::assetId,
+                assessment -> assessment,
+                (first, ignored) -> first
+            ));
         for (Long assetId : request.assetIds()) {
-            addSnapshot(saved, requireAsset(assetId));
+            addSnapshot(saved, requireAsset(assetId), assessments.get(assetId));
         }
         for (AssetDisposalMaterialRequest material : request.materials()) {
             addMaterial(saved, material);
@@ -110,7 +147,7 @@ public class AssetDisposalService {
     public AssetDisposalResponse generateTerm(Long id, String username) {
         AssetDisposal disposal = requireDisposal(id);
         ensureStatus(disposal, AssetDisposalStatus.DRAFT);
-        if (itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id).isEmpty()
+        if (itemRepository.findByDisposalIdOrderByIdAsc(id).isEmpty()
             && materialRepository.findByDisposalIdOrderByIdAsc(id).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inclua ao menos um patrimonio na baixa");
         }
@@ -122,12 +159,17 @@ public class AssetDisposalService {
 
     public String termHtml(Long id) {
         AssetDisposal disposal = requireDisposal(id);
-        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id);
+        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByIdAsc(id);
         List<AssetDisposalMaterial> materials = materialRepository.findByDisposalIdOrderByIdAsc(id);
         List<AssetDisposalDocument> photos = documentRepository.findByDisposalIdOrderByUploadedAtDesc(id).stream()
             .filter(document -> document.getType() == AssetDisposalDocumentType.PHOTO)
             .toList();
-        return fullTermHtml(disposal, items, materials, photos);
+        return new DisposalTermHtmlBuilder()
+            .logo(referenceTermLogoDataUri())
+            .signatories("Departamento de Tecnologia da Informação", disposal.getAuthorizedByName())
+            .destinationText(destinationTextFromNotes(disposal.getNotes()))
+            .photosResolver(item -> itemPhotosDataUri(item, photos))
+            .build(disposal, items, materials);
     }
 
     public byte[] termPdf(Long id) {
@@ -136,7 +178,7 @@ public class AssetDisposalService {
 
     public String signatureSheetHtml(Long id) {
         AssetDisposal disposal = requireDisposal(id);
-        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id);
+        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByIdAsc(id);
         List<AssetDisposalMaterial> materials = materialRepository.findByDisposalIdOrderByIdAsc(id);
         return signatureSheetHtml(disposal, items, materials);
     }
@@ -145,20 +187,53 @@ public class AssetDisposalService {
         return renderPdf(signatureSheetHtml(id));
     }
 
+    public AssetDisposalResponse updateItemAssessment(
+        Long disposalId,
+        Long itemId,
+        AssetDisposalItemAssessmentRequest request,
+        String actor
+    ) {
+        AssetDisposal disposal = requireDisposal(disposalId);
+        if (disposal.getStatus() == AssetDisposalStatus.FINALIZED || disposal.getStatus() == AssetDisposalStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Processo concluido nao permite alterar avaliacao");
+        }
+        AssetDisposalItem item = itemRepository.findById(itemId)
+            .filter(candidate -> candidate.getDisposal().getId().equals(disposalId))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item da baixa nao encontrado"));
+        if (!item.getAsset().getId().equals(request.assetId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Patrimonio informado nao corresponde ao item");
+        }
+        item.setItemReason(request.reason() == null ? disposal.getReason() : request.reason());
+        item.setPhysicalCondition(blankToNull(request.physicalCondition()));
+        item.setEvaluationDescription(blankToNull(request.evaluationDescription()));
+        item.setTechnicalNotes(blankToNull(request.technicalNotes()));
+        item.setRequiresDataSanitization(request.requiresDataSanitization());
+        item.setDataSanitizationCompleted(request.requiresDataSanitization() && request.dataSanitizationCompleted());
+        itemRepository.save(item);
+        event(disposal, "ITEM_ASSESSMENT_UPDATED", "Avaliacao atualizada para o patrimonio " + item.getAssetCodeSnapshot(), actor);
+        return toResponse(disposal, true);
+    }
+
     public AssetDisposalResponse uploadSignedTerm(Long id, MultipartFile file, String username) {
         AssetDisposal disposal = requireDisposal(id);
         ensureStatus(disposal, AssetDisposalStatus.WAITING_SIGNATURE);
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Arquivo obrigatorio");
         }
-        AssetDisposalDocument document = storeDocument(disposal, AssetDisposalDocumentType.SIGNED_TERM, file, username);
+        AssetDisposalDocument document = storeDocument(disposal, AssetDisposalDocumentType.SIGNED_TERM, file, username, null);
 
         disposal.setSignedDocumentUploadedAt(LocalDateTime.now());
         event(disposal, "SIGNED_TERM_UPLOADED", "Termo assinado anexado: " + document.getFileName(), username);
         return toResponse(disposal, true);
     }
 
-    public AssetDisposalResponse uploadDocument(Long id, AssetDisposalDocumentType type, MultipartFile file, String username) {
+    public AssetDisposalResponse uploadDocument(
+        Long id,
+        AssetDisposalDocumentType type,
+        MultipartFile file,
+        String username,
+        Long disposalItemId
+    ) {
         AssetDisposal disposal = requireDisposal(id);
         if (type == AssetDisposalDocumentType.SIGNED_TERM) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use o envio de termo assinado");
@@ -166,7 +241,13 @@ public class AssetDisposalService {
         if (disposal.getStatus() == AssetDisposalStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nao e possivel anexar documento a baixa cancelada");
         }
-        AssetDisposalDocument document = storeDocument(disposal, type, file, username);
+        AssetDisposalItem disposalItem = null;
+        if (disposalItemId != null) {
+            disposalItem = itemRepository.findById(disposalItemId)
+                .filter(item -> item.getDisposal().getId().equals(id))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Item da baixa nao pertence ao processo"));
+        }
+        AssetDisposalDocument document = storeDocument(disposal, type, file, username, disposalItem);
         event(disposal, "DOCUMENT_UPLOADED", "Documento anexado: " + document.getFileName() + " (" + type.name() + ")", username);
         return toResponse(disposal, true);
     }
@@ -192,24 +273,86 @@ public class AssetDisposalService {
         if (!documentRepository.existsByDisposalIdAndType(id, AssetDisposalDocumentType.SIGNED_TERM)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Anexe o termo assinado antes de finalizar");
         }
+        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByIdAsc(id);
+        if (items.stream().anyMatch(item -> item.isRequiresDataSanitization() && !item.isDataSanitizationCompleted())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Conclua a sanitizacao de dados de todos os itens antes de finalizar");
+        }
+        validateFinalizationDocuments(disposal);
         LocalDateTime now = LocalDateTime.now();
-        for (AssetDisposalItem item : itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(id)) {
+        // Estacoes cujo equipamento saiu nesta baixa (para reavaliar vacancia ao final).
+        Map<Long, Station> affectedStations = new LinkedHashMap<>();
+        // Termos de responsabilidade que perderam itens (para encerrar se ficarem vazios).
+        Set<Long> affectedTermIds = new java.util.LinkedHashSet<>();
+        for (AssetDisposalItem item : items) {
             Asset asset = item.getAsset();
-            assignmentRepository.findByAssetIdAndStatus(asset.getId(), AssignmentStatus.ACTIVE)
-                .ifPresent(assignment -> {
-                    assignment.setStatus(AssignmentStatus.RETURNED);
-                    assignment.setUnassignedAt(now);
-                    assignment.setNotes("Encerrado pela baixa patrimonial " + disposal.getNumber());
-                });
+            if (asset.getStatus() == AssetStatus.VOIDED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Patrimonio anulado nao pode ser baixado: " + asset.getAssetCode());
+            }
+            AssetAssignment assignment = assignmentRepository.findByAssetIdAndStatus(asset.getId(), AssignmentStatus.ACTIVE).orElse(null);
+            Station fromStation = assignment == null ? null : assignment.getStation();
+            Employee fromEmployee = fromStation == null ? null : responsibilityRepository.findByStationIdAndCurrentTrue(fromStation.getId())
+                .map(StationResponsibility::getEmployee)
+                .orElse(null);
+            if (assignment != null) {
+                assignment.setStatus(AssignmentStatus.RETURNED);
+                assignment.setUnassignedAt(now);
+                assignment.setNotes("Encerrado pela baixa patrimonial " + disposal.getNumber());
+                if (fromStation != null) {
+                    affectedStations.put(fromStation.getId(), fromStation);
+                }
+            }
+            // Automacao: retira o bem baixado de qualquer termo de responsabilidade aberto.
+            for (ResponsibilityTermItem termItem : responsibilityTermItemRepository
+                    .findByAsset_IdAndTerm_StatusIn(asset.getId(), OPEN_TERM_STATUSES)) {
+                ResponsibilityTerm term = termItem.getTerm();
+                if (term != null) {
+                    affectedTermIds.add(term.getId());
+                    term.setNotes(appendLine(term.getNotes(),
+                        "Item " + asset.getAssetCode() + " removido por baixa patrimonial "
+                            + disposal.getNumber() + " em " + formatDate(now.toLocalDate()) + "."));
+                }
+                responsibilityTermItemRepository.delete(termItem);
+            }
             asset.setStatus(AssetStatus.DISPOSED);
             assetRepository.save(asset);
             AssetMovement movement = new AssetMovement();
             movement.setAsset(asset);
             movement.setMovementType(MovementType.STATUS_CHANGED);
+            movement.setFromStation(fromStation);
+            movement.setFromEmployee(fromEmployee);
             movement.setMovedBy(blankToNull(username));
             movement.setReason("Baixa patrimonial " + disposal.getNumber() + ": " + disposal.getReason().name());
+            movement.setSourceProcessType("ASSET_DISPOSAL");
+            movement.setSourceProcessId(disposal.getId());
+            movement.setSourceProcessNumber(disposal.getNumber());
             movement.setMovedAt(now);
             movementRepository.save(movement);
+        }
+        // Encerra termos de responsabilidade que ficaram sem nenhum bem.
+        for (Long termId : affectedTermIds) {
+            if (!responsibilityTermItemRepository.findByTermIdOrderByAssetCodeSnapshotAsc(termId).isEmpty()) {
+                continue;
+            }
+            responsibilityTermRepository.findById(termId).ifPresent(term -> {
+                if (OPEN_TERM_STATUSES.contains(term.getStatus())) {
+                    term.setStatus(ResponsibilityTermStatus.RETURNED);
+                    term.setReturnedAt(now);
+                    term.setNotes(appendLine(term.getNotes(),
+                        "Termo encerrado automaticamente: todos os bens foram baixados (baixa " + disposal.getNumber() + ")."));
+                }
+            });
+        }
+        // Automacao: estacao que ficou sem nenhum equipamento fica vaga (encerra o responsavel).
+        for (Station station : affectedStations.values()) {
+            if (!assignmentRepository.findByStationIdAndStatus(station.getId(), AssignmentStatus.ACTIVE).isEmpty()) {
+                continue;
+            }
+            responsibilityRepository.findByStationIdAndCurrentTrue(station.getId()).ifPresent(resp -> {
+                resp.setCurrent(false);
+                resp.setEndedAt(now);
+                resp.setNotes(appendLine(resp.getNotes(),
+                    "Estacao liberada pela baixa patrimonial " + disposal.getNumber() + " (sem equipamento vinculado)."));
+            });
         }
         disposal.setStatus(AssetDisposalStatus.FINALIZED);
         disposal.setFinalizedAt(now);
@@ -217,7 +360,36 @@ public class AssetDisposalService {
         return toResponse(disposal, true);
     }
 
-    public AssetDisposalResponse cancel(Long id, AssetDisposalCancelRequest request) {
+    private void validateFinalizationDocuments(AssetDisposal disposal) {
+        Long id = disposal.getId();
+        switch (disposal.getReason()) {
+            case IRREPAIRABLE_DEFECT -> requireDocument(id, AssetDisposalDocumentType.TECHNICAL_REPORT, "Anexe o laudo tecnico para baixa por defeito irreparavel");
+            case DONATION, SALE -> requireDocument(id, AssetDisposalDocumentType.DISPOSAL_RECEIPT, "Anexe o comprovante de recebimento ou alienacao");
+            case DISCARD -> {
+                requireDocument(id, AssetDisposalDocumentType.DISPOSAL_RECEIPT, "Anexe o comprovante de destinacao do descarte");
+                if (!documentRepository.existsByDisposalIdAndType(id, AssetDisposalDocumentType.PHOTO)
+                    && !documentRepository.existsByDisposalIdAndType(id, AssetDisposalDocumentType.ORIGINAL_PROCESS)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Anexe ao menos uma fotografia dos itens destinados ao descarte");
+                }
+            }
+            case LOSS -> {
+                if (!documentRepository.existsByDisposalIdAndType(id, AssetDisposalDocumentType.OTHER)
+                    && !documentRepository.existsByDisposalIdAndType(id, AssetDisposalDocumentType.ORIGINAL_PROCESS)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Anexe a justificativa ou ocorrencia referente ao extravio");
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    private void requireDocument(Long disposalId, AssetDisposalDocumentType type, String message) {
+        if (!documentRepository.existsByDisposalIdAndType(disposalId, type)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+    }
+
+    public AssetDisposalResponse cancel(Long id, AssetDisposalCancelRequest request, String actor) {
         AssetDisposal disposal = requireDisposal(id);
         if (disposal.getStatus() == AssetDisposalStatus.FINALIZED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baixa finalizada nao pode ser cancelada");
@@ -225,7 +397,7 @@ public class AssetDisposalService {
         disposal.setStatus(AssetDisposalStatus.CANCELLED);
         disposal.setCancelledAt(LocalDateTime.now());
         disposal.setCancelReason(request.reason().trim());
-        event(disposal, "CANCELLED", "Baixa cancelada: " + request.reason().trim(), request.username());
+        event(disposal, "CANCELLED", "Baixa cancelada: " + request.reason().trim(), actor);
         return toResponse(disposal, true);
     }
 
@@ -352,7 +524,44 @@ public class AssetDisposalService {
               </section>
 
               <section class="page">
-                <h2>4. Anexo I - Relacao de bens para baixa</h2>
+                <h2>4. Fichas individuais dos bens</h2>
+                <p class="muted">Diagnostico, estado fisico, cautelas e fotografias vinculados diretamente a cada patrimonio.</p>
+            """);
+        for (int index = 0; index < items.size(); index++) {
+            AssetDisposalItem item = items.get(index);
+            html.append("<div class=\"item-sheet\"><div class=\"item-sheet-title\">ITEM ")
+                .append(String.format("%02d", index + 1)).append(" - ").append(html(item.getDescriptionSnapshot()))
+                .append("</div><table class=\"info-table\">");
+            row(html, "Patrimonio", item.getAssetCodeSnapshot());
+            row(html, "Categoria", item.getCategorySnapshot());
+            row(html, "Marca / modelo", safe(item.getManufacturerSnapshot()) + " / " + safe(item.getModelSnapshot()));
+            row(html, "Numero de serie", safe(item.getSerialNumberSnapshot()));
+            row(html, "Responsavel anterior", safe(item.getResponsibleSnapshot()));
+            row(html, "Departamento / estacao anterior", safe(item.getDepartmentSnapshot()) + " / " + safe(item.getStationSnapshot()));
+            row(html, "Motivo individual", item.getItemReason() == null ? reasonTechnicalLabel(disposal) : reasonTechnicalLabel(item.getItemReason()));
+            row(html, "Estado fisico", safe(item.getPhysicalCondition()));
+            row(html, "Avaliacao", safe(item.getEvaluationDescription()));
+            row(html, "Observacao tecnica", safe(item.getTechnicalNotes()));
+            row(html, "Sanitizacao de dados", item.isRequiresDataSanitization()
+                ? (item.isDataSanitizationCompleted() ? "Obrigatoria e concluida" : "Obrigatoria e pendente")
+                : "Nao exigida");
+            html.append("</table><div class=\"photo-grid\">");
+            photos.stream()
+                .filter(photo -> photo.getDisposalItem() != null && photo.getDisposalItem().getId().equals(item.getId()))
+                .forEach(photo -> {
+                    String dataUri = documentImageDataUri(photo);
+                    if (!dataUri.isBlank()) {
+                        html.append("<div class=\"photo-card\"><img src=\"").append(html(dataUri))
+                            .append("\" alt=\"\"/><div>").append(html(photo.getFileName())).append("</div></div>");
+                    }
+                });
+            html.append("</div></div>");
+        }
+        html.append("""
+              </section>
+
+              <section class="page">
+                <h2>5. Anexo I - Relacao consolidada de bens para baixa</h2>
                 <p class="muted">Tabela preenchida automaticamente com os patrimonios selecionados no inventario. Conferir fisicamente etiquetas e numeros patrimoniais antes da assinatura.</p>
                 <table class="assets-table">
                   <thead><tr><th>No</th><th>Patrimonio</th><th>Categoria</th><th>Descricao</th><th>Marca</th><th>Modelo</th><th>Serie</th><th>Local/Setor</th><th>Responsavel</th><th>Estado</th><th>Destino</th></tr></thead>
@@ -381,7 +590,7 @@ public class AssetDisposalService {
         if (!materials.isEmpty()) {
             html.append("""
               <section class="page">
-                <h2>4.1. Materiais sem numero patrimonial</h2>
+                <h2>5.1. Materiais sem numero patrimonial</h2>
                 <p class="muted">Materiais, acessorios, midias e residuos incluidos no mesmo processo sem criacao de patrimonio ficticio.</p>
                 <table class="assets-table">
                   <thead><tr><th>No</th><th>Categoria</th><th>Descricao</th><th>Quantidade</th><th>Unidade</th><th>Dados/credenciais</th><th>Observacoes</th><th>Destino</th></tr></thead>
@@ -405,14 +614,17 @@ public class AssetDisposalService {
               </section>
             """);
         }
-        if (!photos.isEmpty()) {
+        List<AssetDisposalDocument> generalPhotos = photos.stream()
+            .filter(photo -> photo.getDisposalItem() == null)
+            .toList();
+        if (!generalPhotos.isEmpty()) {
             html.append("""
               <section class="page">
-                <h2>4.2. Registro fotografico</h2>
+                <h2>5.2. Registro fotografico geral do lote</h2>
                 <p class="muted">Imagens anexadas ao processo no sistema e incorporadas automaticamente ao termo.</p>
                 <div class="photo-grid">
             """);
-            for (AssetDisposalDocument photo : photos) {
+            for (AssetDisposalDocument photo : generalPhotos) {
                 String dataUri = documentImageDataUri(photo);
                 if (!dataUri.isBlank()) {
                     html.append("<div class=\"photo-card\"><img src=\"").append(html(dataUri))
@@ -502,80 +714,179 @@ public class AssetDisposalService {
     }
 
     private String signatureSheetHtml(AssetDisposal disposal, List<AssetDisposalItem> items, List<AssetDisposalMaterial> materials) {
-        StringBuilder html = new StringBuilder();
-        html.append(documentStart("Folha de Assinatura - Baixa Patrimonial"));
-        html.append("""
-              <section class="signature-page">
-                <div class="model-label">FOLHA PARA IMPRESSAO E ASSINATURA</div>
-                <h1>Folha de Assinatura da Baixa Patrimonial</h1>
-                <p class="cover-subtitle">Esta folha resume e formaliza a aprovacao do termo completo mantido digitalmente no sistema.</p>
-                <div class="cover-grid compact">
-            """);
-        meta(html, "No da baixa", disposal.getNumber());
-        meta(html, "Data", formatDate(disposal.getAuthorizationDate()));
-        meta(html, "Motivo", reasonLabel(disposal));
-        meta(html, "Destino", disposal.getDestination());
         int materialUnits = materials.stream().mapToInt(AssetDisposalMaterial::getQuantity).sum();
-        meta(html, "Patrimonios", String.valueOf(items.size()));
-        meta(html, "Materiais sem patrimonio", String.valueOf(materialUnits));
-        meta(html, "Autorizador", disposal.getAuthorizedByName());
-        html.append("""
-                </div>
-                <div class="box declaration">
-                  <p>Declaro ciencia e aprovacao da baixa patrimonial indicada acima, referente aos bens relacionados no termo completo gerado pelo Sistema de Inventario Patrimonial.</p>
-                  <p>O termo completo permanece armazenado digitalmente no sistema, com relacao integral dos patrimonios, snapshots dos dados cadastrais, justificativa, historico e documentos anexos.</p>
-                </div>
-            """);
-        if (!items.isEmpty()) {
-            html.append("""
-                <h2>Resumo dos patrimônios</h2>
-                <table>
-                  <thead><tr><th>Nº</th><th>Patrimônio</th><th>Categoria</th><th>Descrição</th><th>Local</th></tr></thead>
-                  <tbody>
-            """);
-            for (int index = 0; index < items.size(); index++) {
-                AssetDisposalItem item = items.get(index);
-                html.append("<tr><td>").append(index + 1).append("</td><td>").append(html(item.getAssetCodeSnapshot()))
-                    .append("</td><td>").append(html(item.getCategorySnapshot()))
-                    .append("</td><td>").append(html(item.getDescriptionSnapshot()))
-                    .append("</td><td>").append(html(item.getStationSnapshot()))
-                    .append("</td></tr>");
-            }
-            html.append("</tbody></table>");
+        String destino = destinationTextFromNotes(disposal.getNotes());
+        if (destino == null || destino.isBlank()) {
+            destino = disposal.getDestination();
         }
-        if (!materials.isEmpty()) {
-            html.append("""
-                <h2>Resumo dos materiais sem patrimônio</h2>
-                <table>
-                  <thead><tr><th>Nº</th><th>Categoria</th><th>Descrição</th><th>Quantidade</th><th>Cautela</th></tr></thead>
-                  <tbody>
-            """);
-            for (int index = 0; index < materials.size(); index++) {
-                AssetDisposalMaterial material = materials.get(index);
-                html.append("<tr><td>").append(index + 1)
-                    .append("</td><td>").append(html(material.getCategory()))
-                    .append("</td><td>").append(html(material.getDescription()))
-                    .append("</td><td>").append(material.getQuantity()).append(" ").append(html(material.getUnit()))
-                    .append("</td><td>").append(material.isContainsSensitiveData() ? "Exige destruição segura" : "Sem cautela especial")
-                    .append("</td></tr>");
-            }
-            html.append("</tbody></table>");
+        String segundo = disposal.getAuthorizedByName();
+        String logo = referenceTermLogoDataUri();
+        if (logo == null || logo.isBlank()) {
+            logo = brandLogoDataUri();
         }
-        html.append("""
-                <p class="muted">Caso a lista seja extensa, esta folha assina e referencia o termo completo digital da baixa, evitando impressão desnecessária de todas as páginas.</p>
-                <div class="signatures four">
-                  <div class="signature">Responsavel pela conferencia<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
-                  <div class="signature">Responsavel de TI / Inventario<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
-                  <div class="signature">Gestor administrativo / Autorizador<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
-                  <div class="signature">Tabeliao/Substituto, se aplicavel<br/>Nome:<br/>Cargo/Funcao:<br/>Data:</div>
-                </div>
-              </section>
-            """);
+        String composicao = items.size() + (items.size() == 1 ? " patrimonio" : " patrimonios")
+            + " &#183; " + materialUnits + (materialUnits == 1 ? " material sem patrimonio" : " materiais sem patrimonio");
+
+        StringBuilder html = new StringBuilder();
+        html.append(signatureDocStart("Folha de Assinatura - Baixa Patrimonial"));
+        html.append("<div class=\"page\">");
+
+        // Cabecalho: logo + subtitulo
+        html.append("<div class=\"hdr\"><img src=\"").append(html(logo))
+            .append("\" alt=\"Cartorio Indio Artiaga - 4o Tabelionato de Notas\" />")
+            .append("<div class=\"sub\">Goiania - GO &#183; Departamento de Tecnologia da Informacao</div></div>");
+
+        // Titulo + numero
+        html.append("<table class=\"title-tbl\"><tr>")
+            .append("<td class=\"tl\"><div class=\"kicker\">Baixa patrimonial &#183; folha de assinatura</div>")
+            .append("<h1>Termo de Baixa de Patrimonio</h1></td>")
+            .append("<td class=\"tr\"><span class=\"numbox\">").append(html(disposal.getNumber())).append("</span></td>")
+            .append("</tr></table>");
+
+        // Identificacao
+        html.append("<table class=\"id\"><tbody>");
+        idPair(html, "Data de emissao", html(formatDate(disposal.getAuthorizationDate())),
+            "Motivo", html(reasonLabel(disposal)));
+        idPair(html, "Composicao", composicao,
+            "Autorizacao", html(safe(segundo)));
+        html.append("<tr><th>Destinacao</th><td colspan=\"3\">").append(html(safe(destino))).append("</td></tr>");
+        html.append("</tbody></table>");
+
+        // Declaracao
+        html.append("<p>Declaramos ciencia e aprovacao da baixa patrimonial no <strong>")
+            .append(html(disposal.getNumber()))
+            .append("</strong>, referente aos bens relacionados abaixo. A avaliacao tecnica, as fotografias, as justificativas por item "
+                + "e o historico do processo constam do termo completo, arquivado digitalmente no Sistema de Inventario Patrimonial, "
+                + "que integra esta folha para todos os efeitos.</p>");
+
+        // Grade de itens
+        html.append("<table class=\"grid\"><thead><tr>")
+            .append("<th style=\"width:24pt\">No</th>")
+            .append("<th style=\"width:60pt\">Patrimonio</th>")
+            .append("<th style=\"width:78pt\">Categoria</th>")
+            .append("<th>Descricao</th>")
+            .append("<th style=\"width:62pt\">Local</th>")
+            .append("</tr></thead><tbody>");
+        int n = 0;
+        boolean hasProvisional = false;
+        for (AssetDisposalItem item : items) {
+            n++;
+            String code = item.getAssetCodeSnapshot();
+            if (code != null && code.startsWith("S/N")) {
+                hasProvisional = true;
+            }
+            gridRow(html, n, code, item.getCategorySnapshot(), item.getDescriptionSnapshot(), item.getStationSnapshot());
+        }
+        for (AssetDisposalMaterial material : materials) {
+            n++;
+            hasProvisional = true;
+            String desc = material.getDescription();
+            String qty = material.getQuantity() + " " + safe(material.getUnit());
+            gridRow(html, n, "s/ etiqueta", material.getCategory(),
+                (desc == null ? "" : desc) + " (" + qty + ")", null);
+        }
+        if (n == 0) {
+            html.append("<tr><td colspan=\"5\">Nenhum bem relacionado.</td></tr>");
+        }
+        html.append("</tbody></table>");
+
+        StringBuilder foot = new StringBuilder();
+        if (hasProvisional) {
+            foot.append("Patrimonios iniciados por S/N (ou marcados \"s/ etiqueta\") nao possuem etiqueta fisica; "
+                + "o identificador foi atribuido pelo sistema. ");
+        }
+        foot.append("O termo completo pode ser consultado no sistema pelo numero da baixa.");
+        html.append("<p class=\"note\">").append(html(foot.toString())).append("</p>");
+
+        // Assinaturas
+        html.append("<p class=\"place\">Goiania, ").append(html(formatLongDate(LocalDate.now()))).append(".</p>");
+        html.append("<table class=\"sig-tbl\"><tr>")
+            .append("<td><div class=\"sig-name\">Departamento de Tecnologia da Informacao</div>")
+            .append("<div class=\"sig-role\">Conferencia e abertura da baixa</div>")
+            .append("</td>")
+            .append("<td><div class=\"sig-name\">").append(html(safe(segundo))).append("</div>")
+            .append("<div class=\"sig-role\">Autorizacao da baixa patrimonial</div>")
+            .append("</td>")
+            .append("</tr></table>");
+
+        // Rodape
+        html.append("<table class=\"footer\"><tr>")
+            .append("<td>Cartorio Indio Artiaga &#183; 4o Tabelionato de Notas &#183; documento gerado pelo Sistema de Inventario Patrimonial</td>")
+            .append("<td class=\"r\">").append(html(disposal.getNumber())).append(" | 1/1</td>")
+            .append("</tr></table>");
+
+        html.append("</div>");
         html.append(documentEnd());
         return html.toString();
     }
 
-    private void addSnapshot(AssetDisposal disposal, Asset asset) {
+    /** Um par de campos (dois rotulos + dois valores) da tabela de identificacao da folha. */
+    private void idPair(StringBuilder b, String l1, String v1, String l2, String v2) {
+        b.append("<tr>")
+            .append("<th>").append(html(l1)).append("</th><td>").append(v1).append("</td>")
+            .append("<th>").append(html(l2)).append("</th><td>").append(v2).append("</td>")
+            .append("</tr>");
+    }
+
+    private void gridRow(StringBuilder b, int n, String code, String category, String description, String local) {
+        String bg = (n % 2 == 0) ? "#FAF9F7" : "#fff";
+        b.append("<tr style=\"background:").append(bg).append("\">")
+            .append("<td class=\"mono muted\">").append(String.format("%02d", n)).append("</td>")
+            .append("<td class=\"mono\">").append(html(safe(code))).append("</td>")
+            .append("<td class=\"dim\">").append(html(safe(category))).append("</td>")
+            .append("<td>").append(html(safe(description))).append("</td>")
+            .append("<td class=\"muted\">").append(local == null || local.isBlank() ? "&#8212;" : html(local)).append("</td>")
+            .append("</tr>");
+    }
+
+    private String signatureDocStart(String title) {
+        return """
+            <html lang="pt-BR">
+            <head>
+              <meta charset="utf-8" />
+              <title>""" + html(title) + """
+              </title>
+              <style>
+                * { box-sizing: border-box; }
+                @page { size: A4; margin: 30pt 44pt 26pt; }
+                body { font-family: 'Instrument Sans', Helvetica, Arial, sans-serif; color: #1B2430; margin: 0; background: white; font-size: 9pt; }
+                .page { background: white; }
+                .hdr { border-bottom: 1.5pt solid #00234B; padding-bottom: 6pt; margin-bottom: 10pt; text-align: center; }
+                .hdr img { width: 128pt; height: auto; }
+                .hdr .sub { margin-top: 5pt; font-size: 7.8pt; color: #6B7480; }
+                .title-tbl { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+                .title-tbl td { vertical-align: bottom; border: 0; padding: 0; }
+                .title-tbl td.tr { text-align: right; white-space: nowrap; }
+                .kicker { font-family: 'IBM Plex Mono', monospace; font-size: 7.5pt; letter-spacing: .14em; text-transform: uppercase; color: #8A6E32; margin-bottom: 3pt; }
+                .title-tbl h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 21pt; font-weight: 600; color: #00234B; margin: 0; line-height: 1.05; }
+                .numbox { font-family: 'IBM Plex Mono', monospace; font-size: 11pt; color: #00234B; border: 0.8pt solid #00234B; padding: 4pt 8pt; }
+                table.id { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+                table.id th { text-align: left; background: #FAF9F7; border: 0.5pt solid #E4E0DB; padding: 4.3pt 7pt; font-size: 8pt; color: #3D4653; font-weight: 400; width: 82pt; }
+                table.id td { border: 0.5pt solid #E4E0DB; padding: 4.3pt 7pt; font-size: 8.5pt; line-height: 1.4; }
+                table.grid { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+                table.grid thead th { background: #00234B; color: #fff; padding: 4pt 6pt; font-size: 7.8pt; font-weight: 600; text-align: left; }
+                table.grid td { border-bottom: 0.5pt solid #E4E0DB; padding: 2.4pt 6pt; font-size: 8pt; line-height: 1.35; vertical-align: top; }
+                .mono { font-family: 'IBM Plex Mono', monospace; }
+                .dim { color: #3D4653; }
+                .muted { color: #6B7480; }
+                p { font-size: 9pt; line-height: 1.5; margin: 0 0 8pt; text-align: justify; }
+                p.note { font-size: 7.8pt; color: #6B7480; margin: 6pt 0 0; line-height: 1.4; text-align: left; }
+                p.place { margin: 9pt 0 12pt; text-align: left; font-size: 9pt; }
+                table.sig-tbl { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
+                table.sig-tbl td { width: 50%; vertical-align: top; padding: 0 30pt 0 0; border: 0; }
+                .sig-name { border-top: 0.7pt solid #1B2430; padding-top: 4pt; font-size: 8.6pt; font-weight: 600; }
+                .sig-role { font-size: 7.8pt; color: #6B7480; margin-top: 2pt; }
+                .sig-fill { font-size: 7.8pt; color: #3D4653; margin-top: 8pt; }
+                table.footer { width: 100%; border-collapse: collapse; margin-top: 9pt; border-top: 0.5pt solid #E4E0DB; }
+                table.footer td { font-size: 7pt; color: #6B7480; padding: 5pt 0 0; border: 0; vertical-align: top; }
+                table.footer td.r { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+              </style>
+            </head>
+            <body>
+            """;
+    }
+
+    private void addSnapshot(AssetDisposal disposal, Asset asset, AssetDisposalItemAssessmentRequest assessment) {
         if (asset.getStatus() == AssetStatus.DISPOSED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Patrimonio " + asset.getAssetCode() + " ja esta baixado");
         }
@@ -602,6 +913,12 @@ public class AssetDisposalService {
         item.setResponsibleSnapshot(employee == null ? null : employee.getFullName());
         item.setStatusSnapshot(asset.getStatus().name());
         item.setOriginSnapshot(asset.getOrigin().name());
+        item.setItemReason(assessment == null || assessment.reason() == null ? disposal.getReason() : assessment.reason());
+        item.setPhysicalCondition(assessment == null ? null : blankToNull(assessment.physicalCondition()));
+        item.setEvaluationDescription(assessment == null ? null : blankToNull(assessment.evaluationDescription()));
+        item.setTechnicalNotes(assessment == null ? null : blankToNull(assessment.technicalNotes()));
+        item.setRequiresDataSanitization(assessment != null && assessment.requiresDataSanitization());
+        item.setDataSanitizationCompleted(assessment != null && assessment.dataSanitizationCompleted());
         itemRepository.save(item);
         event(disposal, "ITEM_ADDED", "Patrimonio " + asset.getAssetCode() + " adicionado a baixa", disposal.getRequestedBy());
     }
@@ -623,7 +940,8 @@ public class AssetDisposalService {
         AssetDisposal disposal,
         AssetDisposalDocumentType type,
         MultipartFile file,
-        String username
+        String username,
+        AssetDisposalItem disposalItem
     ) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Arquivo obrigatorio");
@@ -640,6 +958,7 @@ public class AssetDisposalService {
 
         AssetDisposalDocument document = new AssetDisposalDocument();
         document.setDisposal(disposal);
+        document.setDisposalItem(disposalItem);
         document.setType(type);
         document.setFileName(originalName);
         document.setFilePath(target.toString());
@@ -650,7 +969,7 @@ public class AssetDisposalService {
     }
 
     private AssetDisposalResponse toResponse(AssetDisposal disposal, boolean includeDetails) {
-        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByAssetCodeSnapshotAsc(disposal.getId());
+        List<AssetDisposalItem> items = itemRepository.findByDisposalIdOrderByIdAsc(disposal.getId());
         List<AssetDisposalMaterial> materials = materialRepository.findByDisposalIdOrderByIdAsc(disposal.getId());
         List<AssetDisposalItemResponse> itemResponses = includeDetails ? items.stream().map(this::toItemResponse).toList() : List.of();
         List<AssetDisposalMaterialResponse> materialResponses = includeDetails ? materials.stream().map(this::toMaterialResponse).toList() : List.of();
@@ -697,7 +1016,13 @@ public class AssetDisposalService {
             item.getStationSnapshot(),
             item.getResponsibleSnapshot(),
             item.getStatusSnapshot(),
-            item.getOriginSnapshot()
+            item.getOriginSnapshot(),
+            item.getItemReason(),
+            item.getPhysicalCondition(),
+            item.getEvaluationDescription(),
+            item.getTechnicalNotes(),
+            item.isRequiresDataSanitization(),
+            item.isDataSanitizationCompleted()
         );
     }
 
@@ -714,7 +1039,16 @@ public class AssetDisposalService {
     }
 
     private AssetDisposalDocumentResponse toDocumentResponse(AssetDisposalDocument document) {
-        return new AssetDisposalDocumentResponse(document.getId(), document.getType(), document.getFileName(), document.getMimeType(), document.getUploadedBy(), document.getUploadedAt());
+        return new AssetDisposalDocumentResponse(
+            document.getId(),
+            document.getType(),
+            document.getFileName(),
+            document.getMimeType(),
+            document.getUploadedBy(),
+            document.getUploadedAt(),
+            document.getDisposalItem() == null ? null : document.getDisposalItem().getId(),
+            document.getDisposalItem() == null ? null : document.getDisposalItem().getAssetCodeSnapshot()
+        );
     }
 
     private AssetDisposalEventResponse toEventResponse(AssetDisposalEvent event) {
@@ -789,6 +1123,8 @@ public class AssetDisposalService {
                 .photo-card { display: inline-block; vertical-align: top; width: 48%; margin: 0 1% 12px 0; border: 1px solid #d8dee8; padding: 6px; text-align: center; page-break-inside: avoid; }
                 .photo-card img { display: block; width: 100%; height: 180px; object-fit: contain; margin-bottom: 5px; }
                 .photo-card div { color: #657286; font-size: 9px; overflow-wrap: anywhere; }
+                .item-sheet { margin: 12px 0 18px; padding: 12px; border: 1px solid #d8dee8; border-radius: 7px; page-break-inside: avoid; }
+                .item-sheet-title { margin: -12px -12px 10px; padding: 9px 12px; background: #062449; color: white; font-family: Georgia, serif; font-size: 15px; font-weight: 700; }
                 .signatures { margin-top: 36px; page-break-inside: avoid; break-inside: avoid; }
                 .signature { display: inline-block; vertical-align: top; width: 47%; border-top: 1px solid #061a38; padding-top: 7px; min-height: 72px; font-size: 10.5px; line-height: 1.6; margin: 0 2% 28px 0; }
               </style>
@@ -808,6 +1144,7 @@ public class AssetDisposalService {
         try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
+            registerReferenceFonts(builder);
             String normalized = html.stripLeading();
             int htmlStart = normalized.indexOf("<html");
             if (htmlStart > 0) {
@@ -820,6 +1157,35 @@ public class AssetDisposalService {
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Falha ao gerar PDF da baixa patrimonial");
         }
+    }
+
+    /**
+     * Registra as fontes da referencia (Cormorant Garamond / Instrument Sans / IBM Plex Mono)
+     * no renderizador. Sem isso, o openhtmltopdf cai para Helvetica/Georgia e a tipografia
+     * do termo fica diferente do modelo aprovado. Arquivos em src/main/resources/fonts.
+     */
+    private void registerReferenceFonts(PdfRendererBuilder builder) {
+        referenceFont(builder, "Cormorant Garamond", 400, "/fonts/CormorantGaramond-400.ttf");
+        referenceFont(builder, "Cormorant Garamond", 600, "/fonts/CormorantGaramond-600.ttf");
+        referenceFont(builder, "Cormorant Garamond", 700, "/fonts/CormorantGaramond-700.ttf");
+        referenceFont(builder, "Instrument Sans", 400, "/fonts/InstrumentSans-400.ttf");
+        referenceFont(builder, "Instrument Sans", 500, "/fonts/InstrumentSans-500.ttf");
+        referenceFont(builder, "Instrument Sans", 600, "/fonts/InstrumentSans-600.ttf");
+        referenceFont(builder, "Instrument Sans", 700, "/fonts/InstrumentSans-700.ttf");
+        referenceFont(builder, "IBM Plex Mono", 400, "/fonts/IBMPlexMono-Regular.ttf");
+        referenceFont(builder, "IBM Plex Mono", 500, "/fonts/IBMPlexMono-Medium.ttf");
+    }
+
+    private void referenceFont(PdfRendererBuilder builder, String family, int weight, String resource) {
+        if (AssetDisposalService.class.getResource(resource) == null) {
+            return;
+        }
+        builder.useFont(
+            () -> AssetDisposalService.class.getResourceAsStream(resource),
+            family,
+            weight,
+            com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder.FontStyle.NORMAL,
+            true);
     }
 
     private void meta(StringBuilder builder, String label, String value) {
@@ -880,6 +1246,58 @@ public class AssetDisposalService {
         }
     }
 
+    private String referenceTermLogoDataUri() {
+        try (var stream = AssetDisposalService.class.getResourceAsStream("/document-assets/logo-cartorio-reference.b64")) {
+            if (stream == null) {
+                return null;
+            }
+            String base64 = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+            return base64.isBlank() ? null : "data:image/png;base64," + base64;
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * Ate duas fotos do item para o termo (layout aprovado: fotos grandes lado a lado).
+     * Primeiro as fotos vinculadas ao item pelo id; senao, as que tem o codigo do
+     * patrimonio no nome do arquivo.
+     */
+    private List<String> itemPhotosDataUri(AssetDisposalItem item, List<AssetDisposalDocument> photos) {
+        java.util.List<AssetDisposalDocument> matches = photos.stream()
+            .filter(photo -> photo.getDisposalItem() != null && photo.getDisposalItem().getId().equals(item.getId()))
+            .toList();
+        if (matches.isEmpty() && item.getAssetCodeSnapshot() != null && !item.getAssetCodeSnapshot().isBlank()) {
+            matches = photos.stream()
+                .filter(photo -> photo.getFileName() != null && photo.getFileName().contains(item.getAssetCodeSnapshot()))
+                .toList();
+        }
+        java.util.List<String> uris = new java.util.ArrayList<>();
+        for (AssetDisposalDocument document : matches) {
+            String dataUri = documentImageDataUri(document);
+            if (dataUri != null && !dataUri.isBlank()) {
+                uris.add(dataUri);
+            }
+            if (uris.size() == 2) {
+                break;
+            }
+        }
+        return uris;
+    }
+
+    private String destinationTextFromNotes(String notes) {
+        if (notes == null || notes.isBlank()) {
+            return null;
+        }
+        String prefix = "Destinação (texto do termo): ";
+        for (String line : notes.split("\\R")) {
+            if (line.startsWith(prefix)) {
+                return line.substring(prefix.length()).trim();
+            }
+        }
+        return null;
+    }
+
     private String dominantCategory(List<AssetDisposalItem> items) {
         return items.stream()
             .collect(java.util.stream.Collectors.groupingBy(AssetDisposalItem::getCategorySnapshot, java.util.stream.Collectors.counting()))
@@ -928,7 +1346,11 @@ public class AssetDisposalService {
     }
 
     private String reasonTechnicalLabel(AssetDisposal disposal) {
-        return switch (disposal.getReason()) {
+        return reasonTechnicalLabel(disposal.getReason());
+    }
+
+    private String reasonTechnicalLabel(com.assetguardian.backend.domain.AssetDisposalReason reason) {
+        return switch (reason) {
             case OBSOLESCENCE -> "Obsolescencia tecnologica";
             case IRREPAIRABLE_DEFECT -> "Defeito sem reparo viavel";
             case PHYSICAL_DAMAGE -> "Dano fisico";
@@ -1025,12 +1447,27 @@ public class AssetDisposalService {
         return DateTimeFormatter.ofPattern("dd/MM/yyyy").format(value == null ? LocalDate.now() : value);
     }
 
+    private static final String[] MESES_PT = {
+        "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
+        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
+    };
+
+    /** Data por extenso em portugues (ASCII), ex.: "09 de outubro de 2026". */
+    private String formatLongDate(LocalDate value) {
+        LocalDate d = (value == null ? LocalDate.now() : value);
+        return String.format("%02d de %s de %d", d.getDayOfMonth(), MESES_PT[d.getMonthValue() - 1], d.getYear());
+    }
+
     private String formatDateTime(LocalDateTime value) {
         return value == null ? "-" : DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(value);
     }
 
     private String safe(String value) {
         return value == null || value.isBlank() ? "-" : value;
+    }
+
+    private String appendLine(String current, String addition) {
+        return current == null || current.isBlank() ? addition : current.strip() + "\n" + addition;
     }
 
     private String nextNumber() {

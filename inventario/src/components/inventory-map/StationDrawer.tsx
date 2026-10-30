@@ -47,6 +47,9 @@ const StationDrawer = ({ stationId, onClose }: StationDrawerProps) => {
   const [selectedAssetToLink, setSelectedAssetToLink] = useState<string>('');
   const [selectedTransferStation, setSelectedTransferStation] = useState<string>('');
   const [unlinkConfirmId, setUnlinkConfirmId] = useState<string | null>(null);
+  const [linkReason, setLinkReason] = useState('');
+  const [transferReason, setTransferReason] = useState('');
+  const [unlinkReason, setUnlinkReason] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ code: '', name: '', locationCode: '', status: 'ACTIVE' as StationStatus, observation: '' });
   const [changeResponsibleOpen, setChangeResponsibleOpen] = useState(false);
@@ -70,36 +73,39 @@ const StationDrawer = ({ stationId, onClose }: StationDrawerProps) => {
   const otherStations = stations.filter(item => item.id !== stationId && item.status !== 'INACTIVE');
 
   const handleLink = async () => {
-    if (!selectedAssetToLink) return;
-    const result = await linkAsset(selectedAssetToLink, stationId);
+    if (!selectedAssetToLink || !linkReason.trim()) return;
+    const result = await linkAsset(selectedAssetToLink, stationId, linkReason.trim());
     if (result.ok) {
       toast.success('Patrimônio vinculado');
       setLinkDialogOpen(false);
       setSelectedAssetToLink('');
+      setLinkReason('');
     } else {
       toast.error(result.error || 'Erro ao vincular');
     }
   };
 
   const handleUnlink = async () => {
-    if (!unlinkConfirmId) return;
+    if (!unlinkConfirmId || !unlinkReason.trim()) return;
     try {
-      await unlinkAsset(unlinkConfirmId);
+      await unlinkAsset(unlinkConfirmId, unlinkReason.trim());
       toast.success('Patrimônio desvinculado');
       setUnlinkConfirmId(null);
+      setUnlinkReason('');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Erro ao desvincular');
     }
   };
 
   const handleTransfer = async () => {
-    if (!transferAssetId || !selectedTransferStation) return;
-    const result = await transferAsset(transferAssetId, selectedTransferStation);
+    if (!transferAssetId || !selectedTransferStation || !transferReason.trim()) return;
+    const result = await transferAsset(transferAssetId, selectedTransferStation, transferReason.trim());
     if (result.ok) {
       toast.success('Patrimônio transferido');
       setTransferDialogOpen(false);
       setTransferAssetId(null);
       setSelectedTransferStation('');
+      setTransferReason('');
     } else {
       toast.error(result.error || 'Erro ao transferir');
     }
@@ -175,7 +181,7 @@ const StationDrawer = ({ stationId, onClose }: StationDrawerProps) => {
   const statusConfig = {
     ACTIVE: { label: 'Ativa', className: 'bg-success/10 text-success border-success/20' },
     INACTIVE: { label: 'Inativa', className: 'bg-muted text-muted-foreground border-border' },
-    MAINTENANCE: { label: 'Manutenção', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+    MAINTENANCE: { label: 'Em manutenção', className: 'bg-amber-50 text-amber-700 border-amber-200' },
   };
 
   const status = statusConfig[station.status];
@@ -297,9 +303,10 @@ const StationDrawer = ({ stationId, onClose }: StationDrawerProps) => {
               <SelectContent>{unlinkedAssets.map(asset => <SelectItem key={asset.id} value={asset.id}>{asset.assetCode} - {asset.description}</SelectItem>)}</SelectContent>
             </Select>
           )}
+          <div className="space-y-1.5"><Label className="text-xs">Motivo da vinculação *</Label><Textarea value={linkReason} onChange={event => setLinkReason(event.target.value)} placeholder="Ex.: equipamento entregue ao responsável desta estação" className="min-h-[70px] text-sm" /></div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setLinkDialogOpen(false)}>Cancelar</Button>
-            <Button size="sm" onClick={handleLink} disabled={!selectedAssetToLink || station.status === 'INACTIVE'}>Vincular</Button>
+            <Button size="sm" onClick={handleLink} disabled={!selectedAssetToLink || !linkReason.trim() || station.status === 'INACTIVE'}>Vincular</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -311,17 +318,19 @@ const StationDrawer = ({ stationId, onClose }: StationDrawerProps) => {
             <SelectTrigger className="text-sm"><SelectValue placeholder="Estação de destino" /></SelectTrigger>
             <SelectContent>{otherStations.map(item => <SelectItem key={item.id} value={item.id}>{item.code} - {item.name}</SelectItem>)}</SelectContent>
           </Select>
+          <div className="space-y-1.5"><Label className="text-xs">Motivo da transferência *</Label><Textarea value={transferReason} onChange={event => setTransferReason(event.target.value)} placeholder="Ex.: remanejamento para outro responsável" className="min-h-[70px] text-sm" /></div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setTransferDialogOpen(false)}>Cancelar</Button>
-            <Button size="sm" onClick={handleTransfer} disabled={!selectedTransferStation}>Transferir</Button>
+            <Button size="sm" onClick={handleTransfer} disabled={!selectedTransferStation || !transferReason.trim()}>Transferir</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={!!unlinkConfirmId} onOpenChange={open => !open && setUnlinkConfirmId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Desvincular patrimônio?</AlertDialogTitle><AlertDialogDescription>O patrimônio será removido desta estação. Você poderá vinculá-lo novamente depois.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleUnlink}>Desvincular</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Desvincular patrimônio?</AlertDialogTitle><AlertDialogDescription>O patrimônio será removido desta estação. Informe o motivo para preservar a rastreabilidade.</AlertDialogDescription></AlertDialogHeader>
+          <div className="space-y-1.5"><Label className="text-xs">Motivo da desvinculação *</Label><Textarea value={unlinkReason} onChange={event => setUnlinkReason(event.target.value)} placeholder="Ex.: equipamento recolhido para estoque" className="min-h-[70px] text-sm" /></div>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction disabled={!unlinkReason.trim()} onClick={handleUnlink}>Desvincular</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -365,7 +374,7 @@ const StationDrawer = ({ stationId, onClose }: StationDrawerProps) => {
               <Label className="text-xs">Status</Label>
               <Select value={editForm.status} onValueChange={value => setEditForm(current => ({ ...current, status: value as StationStatus }))}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="ACTIVE">Ativa</SelectItem><SelectItem value="INACTIVE">Inativa</SelectItem><SelectItem value="MAINTENANCE">Manutenção</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="ACTIVE">Ativa</SelectItem><SelectItem value="INACTIVE">Inativa</SelectItem><SelectItem value="MAINTENANCE">Em manutenção</SelectItem></SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Observação</Label><Textarea value={editForm.observation} onChange={e => setEditForm(current => ({ ...current, observation: e.target.value }))} placeholder="Observações sobre a estação..." className="text-sm min-h-[60px]" /></div>

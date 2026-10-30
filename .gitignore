@@ -14,6 +14,9 @@ dist-ssr
 .vinxi
 .nitro
 *.local
+.env
+.env.*
+!.env.example
 backup.sql
 *.dump
 /transferencia-producao/
@@ -29,6 +32,13 @@ docs/*.csv
 # Java
 backend/target/
 inventario/backend/target/
+*.tsbuildinfo
+
+# Artefatos locais de execucao, certificados e saidas temporarias
+/.tmp/
+/tmp/
+/output/
+/caddy-root-CA.crt
 
 # Editor directories and files
 .vscode/*

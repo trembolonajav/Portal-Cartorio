@@ -1,8 +1,12 @@
 spring:
   application:
     name: asset-guardian-backend
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/cart_rio_hub}
+    url: ${DB_URL:jdbc:postgresql://localhost:8084/cart_rio_hub}
     username: ${DB_USERNAME:cart_rio}
     password: ${DB_PASSWORD:cart_rio}
   jpa:

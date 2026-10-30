@@ -8,12 +8,14 @@ import com.assetguardian.backend.api.dto.DepartmentResponse;
 import com.assetguardian.backend.api.dto.EmployeeRequest;
 import com.assetguardian.backend.api.dto.EmployeeResponse;
 import com.assetguardian.backend.api.dto.HistoryEventResponse;
+import com.assetguardian.backend.api.dto.MovementResponse;
 import com.assetguardian.backend.api.dto.LinkAssetRequest;
 import com.assetguardian.backend.api.dto.SpaceRequest;
 import com.assetguardian.backend.api.dto.SpaceResponse;
 import com.assetguardian.backend.api.dto.StationRequest;
 import com.assetguardian.backend.api.dto.StationResponse;
 import com.assetguardian.backend.api.dto.TransferAssetRequest;
+import com.assetguardian.backend.api.dto.VoidAssetRequest;
 import com.assetguardian.backend.service.InventoryCommandService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -138,38 +141,56 @@ public class InventoryManagementController {
 
     @PostMapping("/assets")
     @ResponseStatus(HttpStatus.CREATED)
-    public AssetInventoryResponse createAsset(@Valid @RequestBody AssetRequest request) {
-        return inventoryCommandService.createAsset(request);
+    public AssetInventoryResponse createAsset(@Valid @RequestBody AssetRequest request, Authentication authentication) {
+        return inventoryCommandService.createAsset(request, authentication.getName());
     }
 
     @PutMapping("/assets/{id}")
-    public AssetInventoryResponse updateAsset(@PathVariable Long id, @Valid @RequestBody AssetRequest request) {
-        return inventoryCommandService.updateAsset(id, request);
+    public AssetInventoryResponse updateAsset(
+        @PathVariable Long id,
+        @Valid @RequestBody AssetRequest request,
+        Authentication authentication
+    ) {
+        return inventoryCommandService.updateAsset(id, request, authentication.getName());
     }
 
-    @DeleteMapping("/assets/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteAsset(@PathVariable Long id) {
-        inventoryCommandService.deleteAsset(id);
+    @PostMapping("/assets/{id}/void")
+    public AssetInventoryResponse voidAsset(
+        @PathVariable Long id,
+        @Valid @RequestBody VoidAssetRequest request,
+        Authentication authentication
+    ) {
+        return inventoryCommandService.voidAsset(id, request.reason(), authentication.getName());
     }
 
     @PostMapping("/assets/{id}/link")
-    public AssetInventoryResponse linkAsset(@PathVariable Long id, @Valid @RequestBody LinkAssetRequest request) {
-        return inventoryCommandService.linkAsset(id, request.stationId(), request.performedBy(), request.reason());
+    public AssetInventoryResponse linkAsset(
+        @PathVariable Long id,
+        @Valid @RequestBody LinkAssetRequest request,
+        Authentication authentication
+    ) {
+        return inventoryCommandService.linkAsset(id, request.stationId(), authentication.getName(), request.reason());
     }
 
     @PostMapping("/assets/{id}/unlink")
     public AssetInventoryResponse unlinkAsset(
         @PathVariable Long id,
-        @RequestParam(required = false) String performedBy,
-        @RequestParam(required = false) String reason
+        @RequestParam String reason,
+        Authentication authentication
     ) {
-        return inventoryCommandService.unlinkAsset(id, performedBy, reason);
+        return inventoryCommandService.unlinkAsset(id, authentication.getName(), reason);
     }
 
     @PostMapping("/assets/{id}/transfer")
-    public AssetInventoryResponse transferAsset(@PathVariable Long id, @Valid @RequestBody TransferAssetRequest request) {
-        return inventoryCommandService.transferAsset(id, request);
+    public AssetInventoryResponse transferAsset(
+        @PathVariable Long id,
+        @Valid @RequestBody TransferAssetRequest request,
+        Authentication authentication
+    ) {
+        return inventoryCommandService.transferAsset(
+            id,
+            new TransferAssetRequest(request.toStationId(), authentication.getName(), request.reason())
+        );
     }
 
     @GetMapping("/assets-flat")
@@ -180,5 +201,10 @@ public class InventoryManagementController {
     @GetMapping("/assets/{id}/history")
     public List<HistoryEventResponse> getAssetHistory(@PathVariable Long id) {
         return inventoryCommandService.getAssetHistory(id);
+    }
+
+    @GetMapping("/movements")
+    public List<MovementResponse> getMovements() {
+        return inventoryCommandService.listMovements();
     }
 }

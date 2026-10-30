@@ -9,6 +9,7 @@ import AppShell from '@/components/layout/AppShell';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { AssetStatus } from '@/features/inventory-map/types/inventoryMap.types';
 import { toast } from 'sonner';
+import { assetStatusLabel } from '@/lib/status-labels';
 
 interface ImportRow {
   assetCode: string;
@@ -41,7 +42,7 @@ const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Ativo',
   IN_STOCK: 'Em Estoque',
   INACTIVE: 'Inativo',
-  MAINTENANCE: 'Manutenção',
+  MAINTENANCE: 'Em manutenção',
   DISPOSED: 'Baixado',
 };
 
@@ -298,7 +299,7 @@ const ImportarPage = () => {
                           row.status === 'IN_STOCK' ? 'bg-blue-50 text-blue-700 border-blue-200 text-[10px]' :
                           'bg-muted text-muted-foreground border-border text-[10px]'
                         }>
-                          {STATUS_LABELS[row.status] || row.status}
+                          {STATUS_LABELS[row.status] || assetStatusLabel(row.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground truncate max-w-[120px]" title={row.glpiGroup}>{row.glpiGroup || '-'}</TableCell>

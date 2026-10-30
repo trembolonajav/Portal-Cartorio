@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,8 +42,8 @@ public class ResponsibilityTermController {
     }
 
     @PostMapping("/{id}/generate-term")
-    public ResponsibilityTermResponse generateTerm(@PathVariable Long id, @RequestParam(required = false) String username) {
-        return service.generateTerm(id, username);
+    public ResponsibilityTermResponse generateTerm(@PathVariable Long id, @RequestParam(required = false) String username, Authentication authentication) {
+        return service.generateTerm(id, authentication.getName());
     }
 
     @GetMapping("/{id}/term")
@@ -53,23 +54,32 @@ public class ResponsibilityTermController {
             .body(service.termPdf(id));
     }
 
+    @GetMapping("/{id}/signed-term")
+    public ResponseEntity<byte[]> signedTerm(@PathVariable Long id) {
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+            .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=termo-assinado-" + id + ".pdf")
+            .body(service.signedTermPdf(id));
+    }
+
     @PostMapping(path = "/{id}/upload-signed-term", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponsibilityTermResponse uploadSignedTerm(
         @PathVariable Long id,
         @RequestParam("file") MultipartFile file,
-        @RequestParam(required = false) String username
+        @RequestParam(required = false) String username,
+        Authentication authentication
     ) {
-        return service.uploadSignedTerm(id, file, username);
+        return service.uploadSignedTerm(id, file, authentication.getName());
     }
 
     @PostMapping("/{id}/activate")
-    public ResponsibilityTermResponse activate(@PathVariable Long id, @RequestParam(required = false) String username) {
-        return service.activate(id, username);
+    public ResponsibilityTermResponse activate(@PathVariable Long id, @RequestParam(required = false) String username, Authentication authentication) {
+        return service.activate(id, authentication.getName());
     }
 
     @PostMapping("/{id}/return")
-    public ResponsibilityTermResponse returnTerm(@PathVariable Long id, @RequestParam(required = false) String username) {
-        return service.returnTerm(id, username);
+    public ResponsibilityTermResponse returnTerm(@PathVariable Long id, @RequestParam(required = false) String username, Authentication authentication) {
+        return service.returnTerm(id, authentication.getName());
     }
 
     @PostMapping("/{id}/cancel")

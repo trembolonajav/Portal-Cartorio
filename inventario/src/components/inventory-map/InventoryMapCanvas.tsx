@@ -1,9 +1,12 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import { Stage, Layer, Rect, Line, Group, Text, Circle } from 'react-konva';
 import type Konva from 'konva';
 import { useInventoryMapStore } from '@/features/inventory-map/store/useInventoryMapStore';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import type { LayoutElement } from '@/features/inventory-map/types/inventoryMap.types';
+import {
+  getWallGeometry, isWall, snapValue, fmtMeters, WALL_MAGNET, DEFAULT_WALL_THICKNESS, type Point,
+} from '@/features/inventory-map/lib/wallGeometry';
 
 const GRID_SIZE = 20;
 
@@ -36,8 +39,15 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
   const stageRef = useRef<Konva.Stage>(null);
   const {
     layout, mode, selectedElementId, hoveredElementId, showGrid, scale, stagePosition, placingType,
-    selectElement, hoverElement, moveElement, addElement, setScale, setStagePosition,
+    selectElement, hoverElement, moveElement, addElement, setScale, setStagePosition, addWall, moveWall,
   } = useInventoryMapStore();
+
+  // Desenho de parede por cantos (adaptado do editor de referência).
+  const [draft, setDraft] = useState<Point[]>([]);
+  const [cursor, setCursor] = useState<Point | null>(null);
+  const [shiftDown, setShiftDown] = useState(false);
+  const draftRef = useRef<Point[]>(draft);
+  draftRef.current = draft;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -59,6 +69,39 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, selectedElementId]);
 
+  const finishDraft = useCallback((pts?: Point[]) => {
+    const points = pts || draftRef.current;
+    if (points.length >= 2) {
+      useInventoryMapStore.getState().addWall(points.map((p) => [p[0], p[1]] as Point), DEFAULT_WALL_THICKNESS);
+    }
+    setDraft([]);
+  }, []);
+
+  // Limpa rascunho ao sair da ferramenta de parede.
+  useEffect(() => {
+    if (placingType !== 'WALL') {
+      setDraft([]);
+      setCursor(null);
+    }
+  }, [placingType]);
+
+  // Teclas do modo parede: Enter conclui, Esc conclui/cancela, Shift libera o ângulo.
+  useEffect(() => {
+    if (placingType !== 'WALL') return;
+    const kd = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') { setShiftDown(true); return; }
+      if (e.key === 'Enter') { e.preventDefault(); finishDraft(); }
+      else if (e.key === 'Escape') {
+        if (draftRef.current.length) finishDraft();
+        else useInventoryMapStore.getState().cancelPlacing();
+      }
+    };
+    const ku = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftDown(false); };
+    window.addEventListener('keydown', kd);
+    window.addEventListener('keyup', ku);
+    return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); };
+  }, [placingType, finishDraft]);
+
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
     const scaleBy = 1.08;
@@ -78,20 +121,74 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
     });
   }, [scale, stagePosition, setScale, setStagePosition]);
 
-  const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+  const pointerWorld = (): Point | null => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+    const p = stage.getPointerPosition();
+    if (!p) return null;
+    return [(p.x - stagePosition.x) / scale, (p.y - stagePosition.y) / scale];
+  };
+
+  const stations = useInventoryStore(s => s.stations);
+  const assets = useInventoryStore(s => s.assets);
+
+  const sortedElements = [...layout.elements].sort((a, b) => a.zIndex - b.zIndex);
+  const walls = sortedElements.filter(isWall);
+
+  // Ponto de parede com snap na grade, trava em 90° (relativo ao último canto) e ímã nas pontas existentes.
+  const computeWallPoint = (raw: Point): Point => {
+    let x = snapValue(raw[0]);
+    let y = snapValue(raw[1]);
+    const d = draft;
+    if (d.length && !shiftDown) {
+      const [lx, ly] = d[d.length - 1];
+      if (Math.abs(x - lx) >= Math.abs(y - ly)) y = ly; else x = lx;
+    }
+    const cands: Point[] = [];
+    walls.forEach((w) => getWallGeometry(w).points.forEach((pt) => cands.push(pt)));
+    if (d.length > 2) cands.push(d[0]);
+    let best: { c: Point; dist: number } | null = null;
+    cands.forEach((c) => {
+      const dd = Math.hypot(c[0] - x, c[1] - y);
+      if (dd < WALL_MAGNET && (!best || dd < best.dist)) best = { c, dist: dd };
+    });
+    return best ? [best.c[0], best.c[1]] : [x, y];
+  };
+
+  const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (placingType === 'WALL') {
+      const raw = pointerWorld();
+      if (!raw) return;
+      const q = computeWallPoint(raw);
+      const d = draft;
+      if (d.length) {
+        const last = d[d.length - 1];
+        if (last[0] === q[0] && last[1] === q[1]) return;
+      }
+      if (d.length > 2 && q[0] === d[0][0] && q[1] === d[0][1]) {
+        finishDraft([...d, q]);
+        return;
+      }
+      setDraft([...d, q]);
+      return;
+    }
     if (placingType) {
-      const stage = stageRef.current;
-      if (!stage) return;
-      const pointer = stage.getPointerPosition()!;
-      const x = (pointer.x - stagePosition.x) / scale;
-      const y = (pointer.y - stagePosition.y) / scale;
-      addElement(x, y);
+      const raw = pointerWorld();
+      if (!raw) return;
+      addElement(raw[0], raw[1]);
       return;
     }
     if (e.target === e.target.getStage()) {
       selectElement(null);
     }
-  }, [placingType, addElement, selectElement, stagePosition, scale]);
+  };
+
+  const handleStageMouseMove = () => {
+    if (placingType === 'WALL') {
+      const w = pointerWorld();
+      if (w) setCursor(w);
+    }
+  };
 
   const renderGrid = () => {
     if (!showGrid) return null;
@@ -113,9 +210,6 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
     return <>{lines}</>;
   };
 
-  const stations = useInventoryStore(s => s.stations);
-  const assets = useInventoryStore(s => s.assets);
-
   const getStationForElement = (el: LayoutElement) => {
     if (!el.stationId) return null;
     return stations.find(s => s.id === el.stationId) || null;
@@ -125,6 +219,94 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
     const assetId = el.metadata?.assetId;
     if (assetId === undefined || assetId === null || assetId === '') return null;
     return assets.find(asset => asset.id === String(assetId)) || null;
+  };
+
+  // Cotas (metragem) de cada trecho de uma parede.
+  const wallCotas = (geom: ReturnType<typeof getWallGeometry>, keyPrefix: string) => {
+    const nodes: JSX.Element[] = [];
+    const T = geom.thickness;
+    for (let i = 0; i < geom.points.length - 1; i++) {
+      const a = geom.points[i];
+      const b = geom.points[i + 1];
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const len = Math.hypot(dx, dy);
+      if (!len) continue;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const mx = (a[0] + b[0]) / 2 + nx * (T / 2 + 14);
+      const my = (a[1] + b[1]) / 2 + ny * (T / 2 + 14);
+      nodes.push(
+        <Text key={`${keyPrefix}${i}`} x={mx - 40} y={my - 7} width={80} align="center"
+          text={fmtMeters(len)} fontSize={12} fontFamily="monospace" fill={COLORS.selectedStroke} listening={false} />
+      );
+    }
+    return nodes;
+  };
+
+  const buildWalls = () => {
+    const nodes: JSX.Element[] = [];
+    const editable = mode === 'EDIT' && !placingType;
+    walls.forEach((w) => {
+      const geom = getWallGeometry(w);
+      let pts = geom.points;
+      let closed = false;
+      if (geom.closed) { pts = pts.slice(0, -1); closed = true; }
+      const flat = pts.flat();
+      const selected = selectedElementId === w.id;
+      const hovered = hoveredElementId === w.id;
+      if (selected) {
+        nodes.push(
+          <Line key={`wh${w.id}`} points={flat} closed={closed} stroke={COLORS.selectedStroke}
+            strokeWidth={geom.thickness + 8} opacity={0.35} lineJoin="miter" lineCap="square" listening={false} />
+        );
+      }
+      nodes.push(
+        <Line
+          key={`w${w.id}`} points={flat} closed={closed}
+          stroke={hovered && !selected ? COLORS.hoverStroke : COLORS.wallFill}
+          strokeWidth={geom.thickness} lineJoin="miter" lineCap="square"
+          hitStrokeWidth={geom.thickness + 16}
+          draggable={editable}
+          onClick={(e) => { e.cancelBubble = true; if (placingType) return; if (mode === 'EDIT') selectElement(w.id); }}
+          onMouseEnter={() => hoverElement(w.id)}
+          onMouseLeave={() => hoverElement(null)}
+          onDragEnd={(e) => {
+            const node = e.target;
+            const dx = node.x();
+            const dy = node.y();
+            node.position({ x: 0, y: 0 });
+            if (dx || dy) moveWall(w.id, dx, dy);
+          }}
+        />
+      );
+      if (selected) nodes.push(...wallCotas(geom, `wc${w.id}-`));
+    });
+
+    // Rascunho da parede em desenho.
+    if (placingType === 'WALL') {
+      const q = cursor ? computeWallPoint(cursor) : (draft.length ? draft[draft.length - 1] : null);
+      if (draft.length && q) {
+        const previewPts = [...draft, q].flat();
+        nodes.push(
+          <Line key="wdraft" points={previewPts} stroke={COLORS.wallFill} strokeWidth={DEFAULT_WALL_THICKNESS}
+            opacity={0.5} lineJoin="miter" lineCap="square" listening={false} />
+        );
+        const l = draft[draft.length - 1];
+        const len = Math.hypot(q[0] - l[0], q[1] - l[1]);
+        if (len) {
+          nodes.push(
+            <Text key="wdlen" x={q[0] + 10} y={q[1] - 22} text={fmtMeters(len)} fontSize={13}
+              fontFamily="monospace" fill={COLORS.wallFill} listening={false} />
+          );
+        }
+      }
+      draft.forEach((p, i) => nodes.push(
+        <Circle key={`wdp${i}`} x={p[0]} y={p[1]} radius={4.5} fill="#fff" stroke={COLORS.wallFill} strokeWidth={2} listening={false} />
+      ));
+      if (q) nodes.push(<Circle key="wdc" x={q[0]} y={q[1]} radius={5} fill={COLORS.selectedStroke} listening={false} />);
+    }
+    return nodes;
   };
 
   const renderElement = (el: LayoutElement) => {
@@ -178,14 +360,7 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
 
     switch (el.elementType) {
       case 'WALL':
-        return (
-          <Rect key={el.id} x={el.x} y={el.y} width={el.width} height={el.height}
-            fill={COLORS.wallFill} rotation={el.rotation} draggable={isDraggable}
-            onDragEnd={handleDragEnd} onClick={handleClick}
-            onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}
-            stroke={selectionStroke} strokeWidth={selectionWidth}
-            cornerRadius={1} />
-        );
+        return null; // paredes são desenhadas por buildWalls (polilinha)
 
       case 'PARTITION':
         return (
@@ -308,8 +483,7 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
     }
   };
 
-  const sortedElements = [...layout.elements].sort((a, b) => a.zIndex - b.zIndex);
-  const structural = sortedElements.filter(e => e.layer === 'structural');
+  const structuralOther = sortedElements.filter(e => e.layer === 'structural' && !isWall(e));
   const furniture = sortedElements.filter(e => e.layer === 'furniture');
   const labels = sortedElements.filter(e => e.layer === 'labels');
 
@@ -325,6 +499,9 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
       draggable={mode === 'VIEW' && !placingType}
       onWheel={handleWheel}
       onClick={handleStageClick}
+      onMouseMove={handleStageMouseMove}
+      onDblClick={() => { if (placingType === 'WALL') finishDraft(); }}
+      onContextMenu={(e) => { e.evt.preventDefault(); if (placingType === 'WALL') finishDraft(); }}
       onDragEnd={(e) => {
         if (mode === 'VIEW' && e.target === stageRef.current) {
           setStagePosition({ x: e.target.x(), y: e.target.y() });
@@ -338,8 +515,11 @@ const InventoryMapCanvas = ({ containerWidth, containerHeight, onStationClick, o
           fill={COLORS.canvasBg} />
         {renderGrid()}
       </Layer>
-      {/* Structural */}
-      <Layer>{structural.map(renderElement)}</Layer>
+      {/* Structural (blocos/divisórias + paredes por polilinha) */}
+      <Layer>
+        {structuralOther.map(renderElement)}
+        {buildWalls()}
+      </Layer>
       {/* Furniture */}
       <Layer>{furniture.map(renderElement)}</Layer>
       {/* Labels */}

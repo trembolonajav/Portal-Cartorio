@@ -15,11 +15,14 @@ import DepartamentosPage from "./pages/DepartamentosPage";
 import FuncionariosPage from "./pages/FuncionariosPage";
 import ArquivoPage from "./pages/ArquivoPage";
 import FichaPatrimonioPage from "./pages/FichaPatrimonioPage";
+import MovimentacoesPage from "./pages/MovimentacoesPage";
+import ConferenciasPage from "./pages/ConferenciasPage";
 import CatalogoPage from "./pages/CatalogoPage";
 import LoginPage from "./pages/LoginPage";
 import ConferenciaPage from "./pages/ConferenciaPage";
 import ConferenciaEstacaoPage from "./pages/ConferenciaEstacaoPage";
 import NotFound from "./pages/NotFound.tsx";
+import PoliticaPatrimonialPage from "./pages/PoliticaPatrimonialPage";
 
 const queryClient = new QueryClient();
 
@@ -126,13 +129,16 @@ const App = () => (
             <Route path="/" element={<InventoryRoute><InventoryMapPage /></InventoryRoute>} />
             <Route path="/patrimonios" element={<InventoryRoute><PatrimoniosPage /></InventoryRoute>} />
             <Route path="/patrimonios/:id" element={<InventoryRoute><FichaPatrimonioPage /></InventoryRoute>} />
+            <Route path="/movimentacoes" element={<InventoryRoute><MovimentacoesPage /></InventoryRoute>} />
+            <Route path="/conferencias" element={<InventoryRoute><ConferenciasPage /></InventoryRoute>} />
             <Route path="/baixas-patrimoniais" element={<InventoryRoute><BaixasPatrimoniaisPage /></InventoryRoute>} />
             <Route path="/departamentos" element={<InventoryRoute><DepartamentosPage /></InventoryRoute>} />
             <Route path="/funcionarios" element={<InventoryRoute><FuncionariosPage /></InventoryRoute>} />
             <Route path="/espacos" element={<InventoryRoute><EspacosPage /></InventoryRoute>} />
             <Route path="/catalogo" element={<InventoryRoute><CatalogoPage /></InventoryRoute>} />
-            <Route path="/arquivo" element={<InventoryRoute><AdminRoute><ArquivoPage /></AdminRoute></InventoryRoute>} />
+            <Route path="/arquivo" element={<InventoryRoute><ArquivoPage /></InventoryRoute>} />
             <Route path="/importar" element={<InventoryRoute><AdminRoute><ImportarPage /></AdminRoute></InventoryRoute>} />
+            <Route path="/configuracoes/politica-patrimonial" element={<InventoryRoute><AdminRoute><PoliticaPatrimonialPage /></AdminRoute></InventoryRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppInit>

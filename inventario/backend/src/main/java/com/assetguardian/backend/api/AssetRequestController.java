@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/v1/asset-requests")
@@ -27,22 +28,22 @@ public class AssetRequestController {
     }
 
     @PostMapping
-    public AssetRequestResponse create(@Valid @RequestBody AssetRequestCreateRequest request) {
-        return service.create(request);
+    public AssetRequestResponse create(@Valid @RequestBody AssetRequestCreateRequest request, Authentication authentication) {
+        return service.create(request, authentication.getName());
     }
 
     @PostMapping("/{id}/approve")
-    public AssetRequestResponse approve(@PathVariable Long id, @RequestBody(required = false) AssetRequestDecisionRequest request) {
-        return service.approve(id, request);
+    public AssetRequestResponse approve(@PathVariable Long id, @RequestBody(required = false) AssetRequestDecisionRequest request, Authentication authentication) {
+        return service.approve(id, request, authentication.getName());
     }
 
     @PostMapping("/{id}/reject")
-    public AssetRequestResponse reject(@PathVariable Long id, @RequestBody(required = false) AssetRequestDecisionRequest request) {
-        return service.reject(id, request);
+    public AssetRequestResponse reject(@PathVariable Long id, @RequestBody(required = false) AssetRequestDecisionRequest request, Authentication authentication) {
+        return service.reject(id, request, authentication.getName());
     }
 
     @PostMapping("/{id}/cancel")
-    public AssetRequestResponse cancel(@PathVariable Long id, @RequestBody(required = false) AssetRequestDecisionRequest request) {
-        return service.cancel(id, request);
+    public AssetRequestResponse cancel(@PathVariable Long id, @RequestBody(required = false) AssetRequestDecisionRequest request, Authentication authentication) {
+        return service.cancel(id, request, authentication.getName());
     }
 }

@@ -12,6 +12,8 @@ public record EmployeeRequest(
     String fullName,
     @Size(max = 14)
     String cpf,
+    @Size(max = 160)
+    String jobTitle,
     @NotNull
     EmployeeStatus status,
     UUID departmentId

@@ -91,4 +91,13 @@ public class AssetInventoryView {
 
     @Column(name = "asset_updated_at")
     private LocalDateTime assetUpdatedAt;
+
+    @Column(name = "voided_at")
+    private LocalDateTime voidedAt;
+
+    @Column(name = "voided_by")
+    private String voidedBy;
+
+    @Column(name = "void_reason")
+    private String voidReason;
 }

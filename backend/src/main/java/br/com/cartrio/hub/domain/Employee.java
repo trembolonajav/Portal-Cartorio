@@ -25,6 +25,9 @@ public class Employee {
   @Column(unique = true, length = 180)
   private String email;
 
+  @Column(name = "job_title", length = 160)
+  private String jobTitle;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   private EmployeeStatus status;
@@ -36,11 +39,12 @@ public class Employee {
   public Employee() {
   }
 
-  public Employee(UUID id, String fullName, String cpf, String email, EmployeeStatus status, Department department) {
+  public Employee(UUID id, String fullName, String cpf, String email, String jobTitle, EmployeeStatus status, Department department) {
     this.id = id;
     this.fullName = fullName;
     this.cpf = cpf;
     this.email = email;
+    this.jobTitle = jobTitle;
     this.status = status;
     this.department = department;
   }
@@ -49,12 +53,14 @@ public class Employee {
   public String getFullName() { return fullName; }
   public String getCpf() { return cpf; }
   public String getEmail() { return email; }
+  public String getJobTitle() { return jobTitle; }
   public EmployeeStatus getStatus() { return status; }
   public Department getDepartment() { return department; }
 
   public void setFullName(String fullName) { this.fullName = fullName; }
   public void setCpf(String cpf) { this.cpf = cpf; }
   public void setEmail(String email) { this.email = email; }
+  public void setJobTitle(String jobTitle) { this.jobTitle = jobTitle; }
   public void setStatus(EmployeeStatus status) { this.status = status; }
   public void setDepartment(Department department) { this.department = department; }
 }

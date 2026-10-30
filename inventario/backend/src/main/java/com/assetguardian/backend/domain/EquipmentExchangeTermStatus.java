@@ -4,5 +4,6 @@ public enum EquipmentExchangeTermStatus {
     DRAFT,
     WAITING_SIGNATURE,
     ACTIVE,
+    COMPLETED,
     CANCELLED
 }

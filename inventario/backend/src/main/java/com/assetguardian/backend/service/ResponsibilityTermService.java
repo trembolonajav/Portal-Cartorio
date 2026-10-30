@@ -29,6 +29,8 @@ import java.nio.file.Path;
 import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.time.Year;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
@@ -44,6 +46,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Transactional
 public class ResponsibilityTermService {
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("America/Sao_Paulo");
 
     private final ResponsibilityTermRepository termRepository;
     private final ResponsibilityTermItemRepository itemRepository;
@@ -72,6 +75,7 @@ public class ResponsibilityTermService {
         term.setStatus(ResponsibilityTermStatus.DRAFT);
         term.setEmployeeId(employee.getId());
         term.setEmployeeNameSnapshot(employee.getFullName());
+        term.setEmployeeJobTitleSnapshot(blankToNull(employee.getJobTitle()));
         term.setDepartmentSnapshot(department == null ? null : department.getName());
         term.setNotes(blankToNull(request.notes()));
         ResponsibilityTerm saved = termRepository.save(term);
@@ -103,6 +107,18 @@ public class ResponsibilityTermService {
         ResponsibilityTerm term = requireTerm(id);
         List<ResponsibilityTermItem> items = itemRepository.findByTermIdOrderByAssetCodeSnapshotAsc(id);
         return renderPdf(termHtml(term, items));
+    }
+
+    /** Arquivo do termo ASSINADO anexado (o PDF enviado), nao a versao gerada pelo sistema. */
+    public byte[] signedTermPdf(Long id) {
+        ResponsibilityTermDocument document = documentRepository
+            .findFirstByTermIdAndTypeOrderByUploadedAtDesc(id, ResponsibilityTermDocumentType.SIGNED_TERM)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Termo assinado nao anexado"));
+        try {
+            return Files.readAllBytes(Path.of(document.getFilePath()));
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Falha ao ler o termo assinado");
+        }
     }
 
     public ResponsibilityTermResponse uploadSignedTerm(Long id, MultipartFile file, String username) {
@@ -179,6 +195,23 @@ public class ResponsibilityTermService {
         item.setSerialNumberSnapshot(asset.getSerialNumber());
         item.setStationSnapshot(station == null ? null : station.getCode() + " - " + station.getName());
         item.setStatusSnapshot(asset.getStatus().name());
+        String conditionGrade = blankToNull(asset.getConditionGrade());
+        String functionalStatus = blankToNull(asset.getFunctionalStatus());
+        String conditionNotes = blankToNull(asset.getConditionNotes());
+        String initialCondition = blankToNull(asset.getInitialCondition());
+        if (conditionGrade == null && initialCondition != null
+            && initialCondition.toLowerCase(java.util.Locale.ROOT).startsWith("novo")) {
+            conditionGrade = "NEW";
+        }
+        if (functionalStatus == null && "NEW".equals(conditionGrade)) {
+            functionalStatus = "NOT_TESTED";
+        }
+        if (conditionNotes == null && initialCondition != null) {
+            conditionNotes = initialCondition + ", conforme cadastro de aquisicao";
+        }
+        item.setConditionGradeSnapshot(conditionGrade);
+        item.setFunctionalStatusSnapshot(functionalStatus);
+        item.setConditionNotesSnapshot(conditionNotes);
         itemRepository.save(item);
         return station;
     }
@@ -195,6 +228,7 @@ public class ResponsibilityTermService {
             term.getStatus(),
             term.getEmployeeId() == null ? null : term.getEmployeeId().toString(),
             term.getEmployeeNameSnapshot(),
+            term.getEmployeeJobTitleSnapshot(),
             term.getDepartmentSnapshot(),
             term.getLocationSnapshot(),
             term.getNotes(),
@@ -221,7 +255,10 @@ public class ResponsibilityTermService {
             item.getModelSnapshot(),
             item.getSerialNumberSnapshot(),
             item.getStationSnapshot(),
-            item.getStatusSnapshot()
+            item.getStatusSnapshot(),
+            item.getConditionGradeSnapshot(),
+            item.getFunctionalStatusSnapshot(),
+            item.getConditionNotesSnapshot()
         );
     }
 
@@ -232,80 +269,181 @@ public class ResponsibilityTermService {
     // ============================ PDF ============================
 
     private String termHtml(ResponsibilityTerm term, List<ResponsibilityTermItem> items) {
-        String date = formatDateTime(term.getTermGeneratedAt() == null ? LocalDateTime.now() : term.getTermGeneratedAt());
+        // Termo nao ativado: documento e entrega saem com a data de hoje (dia da impressao/assinatura).
+        // Ativado: usa a data real da ativacao.
+        LocalDateTime documentDate = term.getActiveSince() != null
+            ? term.getActiveSince().atZone(ZoneOffset.UTC).withZoneSameInstant(BUSINESS_ZONE).toLocalDateTime()
+            : LocalDateTime.now(BUSINESS_ZONE);
         StringBuilder html = new StringBuilder();
         html.append(documentStart("Termo de Responsabilidade"));
-        html.append("""
-              <section class="cover">
-                <div class="cover-content">
-                  <img class="cover-logo" src=\"""").append(html(brandLogoDataUri())).append("""
-                  " alt="" />
-                  <div class="cover-brand">CARTORIO INDIO ARTIAGA</div>
-                  <div class="cover-notary">4o Tabelionato de Notas</div>
-                  <div class="cover-line"></div>
-                  <h1>TERMO DE RESPONSABILIDADE</h1>
-                  <p class="cover-subtitle">Guarda e uso de bens patrimoniais</p>
-                  <table class="cover-table">
-            """);
-        coverRow(html, "No do termo", term.getNumber());
-        coverRow(html, "Responsavel", term.getEmployeeNameSnapshot());
-        coverRow(html, "Setor", safe(term.getDepartmentSnapshot()));
-        coverRow(html, "Data de emissao", date);
-        coverRow(html, "Quantidade de bens", String.valueOf(items.size()));
-        coverRow(html, "Status documental", statusLabel(term.getStatus()));
-        html.append("""
-                  </table>
-                </div>
-              </section>
+        html.append("<div class=\"page\">");
 
-              <section class="page">
-                <h2>1. Identificacao do responsavel</h2>
-                <table class="info-table">
-            """);
-        row(html, "Nome", term.getEmployeeNameSnapshot());
-        row(html, "Setor / departamento", safe(term.getDepartmentSnapshot()));
-        row(html, "Localizacao principal", safe(term.getLocationSnapshot()));
-        row(html, "Unidade", "Cartorio Indio Artiaga - 4o Tabelionato de Notas");
+        // Cabecalho: logo + subtitulo
         html.append("""
-                </table>
-
-                <h2>2. Declaracao</h2>
-                <div class="box declaration">
-                  <p>Declaro para os devidos fins que recebi, sob minha guarda e responsabilidade, os bens patrimoniais relacionados no quadro abaixo, comprometendo-me a zelar pela sua conservacao e a comunicar formalmente qualquer dano, extravio ou necessidade de movimentacao ao setor responsavel pelo inventario patrimonial.</p>
-                </div>
-
-                <h2>3. Bens sob responsabilidade</h2>
-                <table class="assets-table">
-                  <thead>
-                    <tr><th>Codigo</th><th>Descricao</th><th>Categoria</th><th>No de serie</th><th>Localizacao</th></tr>
-                  </thead>
-                  <tbody>
+              <div class="hdr">
+                <img src=\"""").append(html(headerLogo())).append("""
+                " alt="Cartorio Indio Artiaga - 4o Tabelionato de Notas" />
+                <div class="sub">Goiania - GO &#183; Departamento de Tecnologia da Informacao</div>
+              </div>
             """);
+
+        // Titulo + numero
+        html.append("<table class=\"title-tbl\"><tr>")
+            .append("<td class=\"tl\"><div class=\"kicker\">Entrega de bens patrimoniais</div>")
+            .append("<h1>Termo de Responsabilidade Patrimonial</h1></td>")
+            .append("<td class=\"tr\"><span class=\"numbox\">").append(html(term.getNumber())).append("</span></td>")
+            .append("</tr></table>");
+
+        // Tabela de identificacao
+        html.append("<table class=\"id\"><tbody>");
+        idPair(html, "Responsavel", "<strong>" + html(term.getEmployeeNameSnapshot()) + "</strong>",
+            "Setor", html(safe(term.getDepartmentSnapshot())));
+        idPair(html, "Cargo / funcao", html(notInformed(term.getEmployeeJobTitleSnapshot())),
+            "Estacao", html(safe(term.getLocationSnapshot())));
+        idPair(html, "Data de entrega", html(formatShortDate(documentDate)),
+            "Emitido por", "Departamento de Tecnologia da Informacao");
+        html.append("</tbody></table>");
+
+        // 1. Bens entregues
+        html.append("<h2 class=\"sec\">1. Bens entregues</h2>");
+        html.append("<table class=\"grid\"><thead><tr>")
+            .append("<th style=\"width:62pt\">Patrimonio</th>")
+            .append("<th>Equipamento</th>")
+            .append("<th>Marca / modelo</th>")
+            .append("<th style=\"width:82pt\">No de serie</th>")
+            .append("<th style=\"width:50pt\">Estado</th>")
+            .append("</tr></thead><tbody>");
         if (items.isEmpty()) {
             html.append("<tr><td colspan=\"5\">Nenhum bem vinculado.</td></tr>");
         } else {
             for (ResponsibilityTermItem item : items) {
                 html.append("<tr>")
-                    .append("<td>").append(html(item.getAssetCodeSnapshot())).append("</td>")
-                    .append("<td>").append(html(item.getDescriptionSnapshot())).append("</td>")
-                    .append("<td>").append(html(item.getCategorySnapshot())).append("</td>")
-                    .append("<td>").append(html(safe(item.getSerialNumberSnapshot()))).append("</td>")
-                    .append("<td>").append(html(safe(item.getStationSnapshot()))).append("</td>")
+                    .append("<td class=\"mono\">").append(html(item.getAssetCodeSnapshot())).append("</td>")
+                    .append("<td>").append(equipmentLabel(item)).append("</td>")
+                    .append("<td class=\"dim\">").append(brandModel(item)).append("</td>")
+                    .append("<td class=\"mono dim\">").append(html(safe(item.getSerialNumberSnapshot()))).append("</td>")
+                    .append("<td>").append(conditionLabel(item)).append("</td>")
                     .append("</tr>");
             }
         }
-        html.append("""
-                  </tbody>
-                </table>
-                <div class="signatures">
-                  <div class="signature">Responsavel<br/>""").append(html(term.getEmployeeNameSnapshot())).append("""
-                  </div>
-                  <div class="signature">Administracao / Inventario patrimonial</div>
-                </div>
-              </section>
-            """);
+        html.append("</tbody></table>");
+        html.append("<p class=\"note\">Quantidade conferida na entrega: ")
+            .append(items.size()).append(items.size() == 1 ? " bem" : " bens")
+            .append(" &#183; estado verificado individualmente.</p>");
+        List<ResponsibilityTermItem> observations = items.stream()
+            .filter(item -> item.getConditionNotesSnapshot() != null && !item.getConditionNotesSnapshot().isBlank())
+            .filter(item -> !"GOOD".equals(item.getConditionGradeSnapshot())
+                || !"WORKING".equals(item.getFunctionalStatusSnapshot()))
+            .toList();
+        if (!observations.isEmpty()) {
+            html.append("<div class=\"condition-notes\"><strong>Observacoes de conservacao:</strong> ");
+            for (int i = 0; i < observations.size(); i++) {
+                ResponsibilityTermItem item = observations.get(i);
+                if (i > 0) html.append("; ");
+                html.append(html(item.getAssetCodeSnapshot())).append(": ")
+                    .append(html(item.getConditionNotesSnapshot()));
+            }
+            html.append("</div>");
+        }
+
+        // 2. Compromissos
+        html.append("<h2 class=\"sec\">2. Compromissos do responsavel</h2>");
+        html.append("<p>Declaro que recebi os bens relacionados acima, de propriedade da serventia, "
+            + "nas condicoes de funcionamento e conservacao registradas individualmente neste termo, "
+            + "apos conferencia fisica, e assumo o compromisso de:</p>");
+        html.append("<table class=\"comp\"><tbody>");
+        compromisso(html, "I", "zelar pela guarda e conservacao dos bens, utilizando-os exclusivamente nas atividades da serventia;");
+        compromisso(html, "II", "nao emprestar, ceder, trocar ou retirar os bens das dependencias do cartorio sem autorizacao do Departamento de T.I.;");
+        compromisso(html, "III", "nao instalar programas, alterar configuracoes ou conectar dispositivos nao homologados pelo Departamento de T.I.;");
+        compromisso(html, "IV", "comunicar imediatamente ao Departamento de T.I. qualquer defeito, dano, furto, extravio ou mudanca de estacao;");
+        compromisso(html, "V", "devolver os bens quando solicitado, em caso de substituicao, mudanca de funcao, afastamento ou desligamento;");
+        compromisso(html, "VI", "responder por danos causados por dolo ou culpa, apurados na forma da legislacao aplicavel.");
+        html.append("</tbody></table>");
+        html.append("<p style=\"margin-top:8pt\">A responsabilidade sobre os bens cessa com a devolucao registrada "
+            + "pelo Departamento de Tecnologia da Informacao, mediante termo de troca ou de devolucao.</p>");
+
+        // Assinaturas
+        html.append("<p class=\"place\">Goiania, ").append(html(formatLongDate(documentDate))).append(".</p>");
+        html.append("<table class=\"sig-tbl\"><tr>")
+            .append("<td><div class=\"sig-name\">").append(html(term.getEmployeeNameSnapshot())).append("</div>")
+            .append("<div class=\"sig-role\">Responsavel pelos bens</div></td>")
+            .append("<td><div class=\"sig-name\">Departamento de Tecnologia da Informacao</div>")
+            .append("<div class=\"sig-role\">Entrega e conferencia dos bens</div></td>")
+            .append("<td><div class=\"sig-name\">Administrativo</div>")
+            .append("<div class=\"sig-role\">Ciencia e autorizacao</div></td>")
+            .append("</tr></table>");
+
+        // Rodape
+        html.append("<table class=\"footer\"><tr>")
+            .append("<td>Cartorio Indio Artiaga &#183; 4o Tabelionato de Notas &#183; documento gerado pelo Sistema de Inventario Patrimonial</td>")
+            .append("<td class=\"r\">").append(html(term.getNumber())).append(" | 1/1</td>")
+            .append("</tr></table>");
+
+        html.append("</div>");
         html.append(documentEnd());
         return html.toString();
+    }
+
+    /** Um par de campos (dois rotulos + dois valores) da tabela de identificacao. */
+    private void idPair(StringBuilder b, String l1, String v1, String l2, String v2) {
+        b.append("<tr>")
+            .append("<th>").append(html(l1)).append("</th><td>").append(v1).append("</td>")
+            .append("<th>").append(html(l2)).append("</th><td>").append(v2).append("</td>")
+            .append("</tr>");
+    }
+
+    private void compromisso(StringBuilder b, String numeral, String texto) {
+        b.append("<tr><td class=\"n\">").append(numeral).append("</td><td class=\"t\">")
+            .append(html(texto)).append("</td></tr>");
+    }
+
+    /** Coluna "Equipamento": usa a categoria; se vazia, a descricao. */
+    private String equipmentLabel(ResponsibilityTermItem item) {
+        String cat = item.getCategorySnapshot();
+        if (cat != null && !cat.isBlank()) {
+            return html(cat);
+        }
+        return html(item.getDescriptionSnapshot());
+    }
+
+    /** Coluna "Marca / modelo": fabricante + modelo; se ambos vazios, a descricao. */
+    private String brandModel(ResponsibilityTermItem item) {
+        String manu = item.getManufacturerSnapshot();
+        String model = item.getModelSnapshot();
+        StringBuilder sb = new StringBuilder();
+        if (manu != null && !manu.isBlank()) {
+            sb.append(manu.trim());
+        }
+        if (model != null && !model.isBlank()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(model.trim());
+        }
+        if (sb.length() == 0) {
+            return html(item.getDescriptionSnapshot());
+        }
+        return html(sb.toString());
+    }
+
+    private String conditionLabel(ResponsibilityTermItem item) {
+        String grade = switch (safe(item.getConditionGradeSnapshot())) {
+            case "NEW" -> "Novo";
+            case "EXCELLENT" -> "Excelente";
+            case "GOOD" -> "Bom";
+            case "FAIR" -> "Regular";
+            case "POOR" -> "Ruim";
+            case "UNSERVICEABLE" -> "Inservivel";
+            default -> "Nao informado";
+        };
+        String functional = switch (safe(item.getFunctionalStatusSnapshot())) {
+            case "WORKING" -> "funcional";
+            case "PARTIALLY_WORKING" -> "parcial";
+            case "NOT_TESTED" -> "nao testado";
+            case "NOT_WORKING" -> "inoperante";
+            default -> null;
+        };
+        return html(functional == null ? grade : grade + " / " + functional);
     }
 
     private String documentStart(String title) {
@@ -317,33 +455,42 @@ public class ResponsibilityTermService {
               </title>
               <style>
                 * { box-sizing: border-box; }
-                @page { size: A4; margin: 13mm 13mm 15mm 13mm; @bottom-center { content: "Documento gerado automaticamente pelo Sistema de Inventario Patrimonial"; font-size: 9px; color: #657286; } }
-                body { font-family: Arial, sans-serif; color: #061a38; margin: 0; background: white; font-size: 12px; }
-                .cover, .page { background: white; margin: 0 0 12px; page-break-inside: avoid; }
-                .cover { min-height: 267mm; margin: -13mm -13mm 18px -13mm; padding: 0; page-break-after: always; background: #062449; background-image: radial-gradient(circle at 50% 30%, #0c3667 0, #062449 45%, #03172e 100%); color: white; text-align: center; }
-                .cover-content { padding: 40mm 23mm 18mm; }
-                .cover-logo { width: 48px; height: auto; margin: 0 auto 14mm; display: block; }
-                .cover-brand { font-family: Georgia, 'Times New Roman', serif; font-size: 26px; letter-spacing: .08em; font-weight: 700; }
-                .cover-notary { color: #d8bd83; font-size: 17px; margin-top: 4px; }
-                .cover-line { height: 1px; background: #d8bd83; width: 78%; margin: 24mm auto 16mm; }
-                .cover h1 { color: white; font-size: 30px; letter-spacing: .09em; font-weight: 800; margin: 0 0 6mm; }
-                .cover .cover-subtitle { color: #d8bd83; font-size: 16px; margin: 0 0 16mm; }
-                .cover-table { width: 82%; margin: 0 auto; border-collapse: collapse; color: white; font-size: 12px; }
-                .cover-table th, .cover-table td { border: 1px solid #d8bd83; padding: 10px 12px; color: white; }
-                .cover-table th { width: 40%; text-align: left; font-weight: 500; }
-                .cover-table td { text-align: right; font-weight: 800; }
-                h1 { font-size: 26px; margin: 0 0 8px; color: #061a38; }
-                h2 { font-size: 17px; margin: 16px 0 8px; color: #061a38; }
-                p { font-size: 11.5px; line-height: 1.45; margin: 5px 0; }
-                .box { border: 1px solid #d8dee8; border-radius: 6px; padding: 10px; margin: 8px 0; background: #fbfcfe; }
-                .declaration { border-left: 4px solid #d5a84f; }
-                table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; page-break-inside: avoid; }
-                th { background: #062449; color: white; text-align: left; padding: 6px; }
-                td { border: 1px solid #d8dee8; padding: 6px; vertical-align: top; }
-                .info-table th { width: 34%; background: #f2f5f9; color: #061a38; }
-                .assets-table { font-size: 9px; }
-                .signatures { margin-top: 40px; page-break-inside: avoid; }
-                .signature { display: inline-block; vertical-align: top; width: 47%; border-top: 1px solid #061a38; padding-top: 8px; min-height: 60px; font-size: 10.5px; line-height: 1.6; margin: 0 2% 0 0; }
+                @page { size: A4; margin: 22pt 38pt 18pt; }
+                body { font-family: 'Instrument Sans', Helvetica, Arial, sans-serif; color: #1B2430; margin: 0; background: white; font-size: 9pt; }
+                .page { background: white; }
+                .hdr { border-bottom: 1.5pt solid #00234B; padding-bottom: 5pt; margin-bottom: 8pt; text-align: center; }
+                .hdr img { width: 112pt; height: auto; }
+                .hdr .sub { margin-top: 3pt; font-size: 7pt; color: #6B7480; }
+                .title-tbl { width: 100%; border-collapse: collapse; margin-bottom: 7pt; }
+                .title-tbl td { vertical-align: bottom; border: 0; padding: 0; }
+                .title-tbl td.tr { text-align: right; white-space: nowrap; }
+                .kicker { font-family: 'IBM Plex Mono', monospace; font-size: 7.5pt; letter-spacing: .14em; text-transform: uppercase; color: #8A6E32; margin-bottom: 3pt; }
+                .title-tbl h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 18pt; font-weight: 600; color: #00234B; margin: 0; line-height: 1.02; }
+                .numbox { font-family: 'IBM Plex Mono', monospace; font-size: 11pt; color: #00234B; border: 0.8pt solid #00234B; padding: 4pt 8pt; }
+                table.id { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+                table.id th { text-align: left; background: #FAF9F7; border: 0.5pt solid #E4E0DB; padding: 3pt 5pt; font-size: 7.3pt; color: #3D4653; font-weight: 400; width: 72pt; }
+                table.id td { border: 0.5pt solid #E4E0DB; padding: 3pt 5pt; font-size: 7.8pt; }
+                h2.sec { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 11.5pt; font-weight: 600; color: #00234B; margin: 0 0 3pt; }
+                table.grid { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+                table.grid thead th { background: #00234B; color: #fff; padding: 3pt 4pt; font-size: 6.8pt; font-weight: 600; text-align: left; }
+                table.grid td { border-bottom: 0.5pt solid #E4E0DB; padding: 2.6pt 4pt; font-size: 7.1pt; vertical-align: top; }
+                .mono { font-family: 'IBM Plex Mono', monospace; }
+                .dim { color: #3D4653; }
+                p { font-size: 7.6pt; line-height: 1.32; margin: 0 0 3pt; text-align: justify; }
+                p.note { font-size: 7pt; color: #6B7480; margin: 3pt 0 5pt; text-align: left; }
+                .condition-notes { font-size: 6.8pt; line-height: 1.25; color: #3D4653; background: #FAF9F7; padding: 3pt 5pt; margin: 0 0 6pt; }
+                p.place { margin: 11pt 0 17pt; text-align: left; }
+                table.comp { width: 100%; border-collapse: collapse; }
+                table.comp td.n { width: 14pt; font-family: 'IBM Plex Mono', monospace; color: #8A6E32; font-size: 7.2pt; vertical-align: top; padding: 1pt 0; border: 0; }
+                table.comp td.t { font-size: 7.2pt; line-height: 1.28; text-align: justify; padding: 1pt 0; border: 0; }
+                table.sig-tbl { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
+                table.sig-tbl td { width: 33.33%; vertical-align: top; padding: 0 14pt 0 0; border: 0; }
+                table.sig-tbl td:last-child { padding-right: 0; }
+                .sig-name { border-top: 0.7pt solid #1B2430; padding-top: 4pt; font-size: 8.6pt; font-weight: 600; }
+                .sig-role { font-size: 7.8pt; color: #6B7480; margin-top: 2pt; }
+                table.footer { width: 100%; border-collapse: collapse; margin-top: 8pt; border-top: 0.5pt solid #E4E0DB; page-break-inside: avoid; }
+                table.footer td { font-size: 7pt; color: #6B7480; padding: 6pt 0 0; border: 0; vertical-align: top; }
+                table.footer td.r { text-align: right; font-family: 'IBM Plex Mono', monospace; }
               </style>
             </head>
             <body>
@@ -361,6 +508,7 @@ public class ResponsibilityTermService {
         try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
+            registerReferenceFonts(builder);
             String normalized = htmlContent.stripLeading();
             int htmlStart = normalized.indexOf("<html");
             if (htmlStart > 0) {
@@ -383,6 +531,24 @@ public class ResponsibilityTermService {
             return "data:image/png;base64," + Base64.getEncoder().encodeToString(stream.readAllBytes());
         } catch (IOException ex) {
             return "";
+        }
+    }
+
+    /** Logo do cabecalho: prefere o wordmark de referencia; senao, o emblema padrao. */
+    private String headerLogo() {
+        String ref = referenceTermLogoDataUri();
+        return (ref == null || ref.isBlank()) ? brandLogoDataUri() : ref;
+    }
+
+    private String referenceTermLogoDataUri() {
+        try (var stream = ResponsibilityTermService.class.getResourceAsStream("/document-assets/logo-cartorio-reference.b64")) {
+            if (stream == null) {
+                return null;
+            }
+            String base64 = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+            return base64.isBlank() ? null : "data:image/png;base64," + base64;
+        } catch (IOException ex) {
+            return null;
         }
     }
 
@@ -436,6 +602,10 @@ public class ResponsibilityTermService {
         return value == null || value.isBlank() ? "-" : value;
     }
 
+    private String notInformed(String value) {
+        return value == null || value.isBlank() ? "Não informado" : value;
+    }
+
     private String safeFileName(String value) {
         String normalized = Normalizer.normalize(value, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
         return normalized.replaceAll("[^A-Za-z0-9._-]", "_");
@@ -443,6 +613,46 @@ public class ResponsibilityTermService {
 
     private String formatDateTime(LocalDateTime value) {
         return value == null ? "-" : DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(value);
+    }
+
+    private String formatShortDate(LocalDateTime value) {
+        return value == null ? "-" : DateTimeFormatter.ofPattern("dd/MM/yyyy").format(value);
+    }
+
+    private static final String[] MESES = {
+        "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
+        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
+    };
+
+    private String formatLongDate(LocalDateTime value) {
+        if (value == null) {
+            return "-";
+        }
+        return value.getDayOfMonth() + " de " + MESES[value.getMonthValue() - 1] + " de " + value.getYear();
+    }
+
+    private void registerReferenceFonts(PdfRendererBuilder builder) {
+        referenceFont(builder, "Cormorant Garamond", 400, "/fonts/CormorantGaramond-400.ttf");
+        referenceFont(builder, "Cormorant Garamond", 600, "/fonts/CormorantGaramond-600.ttf");
+        referenceFont(builder, "Cormorant Garamond", 700, "/fonts/CormorantGaramond-700.ttf");
+        referenceFont(builder, "Instrument Sans", 400, "/fonts/InstrumentSans-400.ttf");
+        referenceFont(builder, "Instrument Sans", 500, "/fonts/InstrumentSans-500.ttf");
+        referenceFont(builder, "Instrument Sans", 600, "/fonts/InstrumentSans-600.ttf");
+        referenceFont(builder, "Instrument Sans", 700, "/fonts/InstrumentSans-700.ttf");
+        referenceFont(builder, "IBM Plex Mono", 400, "/fonts/IBMPlexMono-Regular.ttf");
+        referenceFont(builder, "IBM Plex Mono", 500, "/fonts/IBMPlexMono-Medium.ttf");
+    }
+
+    private void referenceFont(PdfRendererBuilder builder, String family, int weight, String resource) {
+        if (ResponsibilityTermService.class.getResource(resource) == null) {
+            return;
+        }
+        builder.useFont(
+            () -> ResponsibilityTermService.class.getResourceAsStream(resource),
+            family,
+            weight,
+            com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder.FontStyle.NORMAL,
+            true);
     }
 
     private String html(String value) {

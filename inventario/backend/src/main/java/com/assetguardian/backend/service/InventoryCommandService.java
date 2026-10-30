@@ -8,6 +8,7 @@ import com.assetguardian.backend.api.dto.DepartmentResponse;
 import com.assetguardian.backend.api.dto.EmployeeRequest;
 import com.assetguardian.backend.api.dto.EmployeeResponse;
 import com.assetguardian.backend.api.dto.HistoryEventResponse;
+import com.assetguardian.backend.api.dto.MovementResponse;
 import com.assetguardian.backend.api.dto.SpaceRequest;
 import com.assetguardian.backend.api.dto.SpaceResponse;
 import com.assetguardian.backend.api.dto.StationRequest;
@@ -17,6 +18,7 @@ import com.assetguardian.backend.domain.Asset;
 import com.assetguardian.backend.domain.AssetAssignment;
 import com.assetguardian.backend.domain.AssetMovement;
 import com.assetguardian.backend.domain.AssetOrigin;
+import com.assetguardian.backend.domain.AssetStatus;
 import com.assetguardian.backend.domain.AssignmentStatus;
 import com.assetguardian.backend.domain.Department;
 import com.assetguardian.backend.domain.Employee;
@@ -28,8 +30,12 @@ import com.assetguardian.backend.domain.StationStatus;
 import com.assetguardian.backend.repository.AssetAssignmentRepository;
 import com.assetguardian.backend.repository.AssetMovementRepository;
 import com.assetguardian.backend.repository.AssetRepository;
+import com.assetguardian.backend.repository.AssetDisposalItemRepository;
 import com.assetguardian.backend.repository.DepartmentRepository;
 import com.assetguardian.backend.repository.EmployeeRepository;
+import com.assetguardian.backend.repository.EquipmentExchangeTermRepository;
+import com.assetguardian.backend.repository.PhysicalCheckRepository;
+import com.assetguardian.backend.repository.ResponsibilityTermItemRepository;
 import com.assetguardian.backend.repository.SpaceRepository;
 import com.assetguardian.backend.repository.StationRepository;
 import com.assetguardian.backend.repository.StationResponsibilityRepository;
@@ -57,7 +63,12 @@ public class InventoryCommandService {
     private final AssetRepository assetRepository;
     private final AssetAssignmentRepository assetAssignmentRepository;
     private final AssetMovementRepository assetMovementRepository;
+    private final AssetDisposalItemRepository assetDisposalItemRepository;
+    private final ResponsibilityTermItemRepository responsibilityTermItemRepository;
+    private final EquipmentExchangeTermRepository equipmentExchangeTermRepository;
+    private final PhysicalCheckRepository physicalCheckRepository;
     private final StationResponsibilityRepository stationResponsibilityRepository;
+    private final AssetPolicyService assetPolicyService;
 
     public List<DepartmentResponse> listDepartments() {
         return departmentRepository.findAll().stream()
@@ -157,37 +168,63 @@ public class InventoryCommandService {
             .toList();
     }
 
-    public AssetInventoryResponse createAsset(AssetRequest request) {
+    public AssetInventoryResponse createAsset(AssetRequest request, String actor) {
+        ensureStatusCanBeSetOnCreate(request.status());
         Asset asset = new Asset();
         applyAsset(asset, request);
+        assetPolicyService.applyDefaults(asset);
         Asset saved = saveAsset(asset);
-        registerMovement(saved, MovementType.CREATED, null, null, "system", "Cadastro inicial");
+        registerMovement(saved, MovementType.CREATED, null, null, actor, "Cadastro inicial");
         return toAssetInventoryResponse(saved);
     }
 
-    public AssetInventoryResponse updateAsset(Long id, AssetRequest request) {
+    public AssetInventoryResponse updateAsset(Long id, AssetRequest request, String actor) {
         Asset asset = requireAsset(id);
+        AssetStatus previousStatus = asset.getStatus();
+        ensureStatusCanBeChangedManually(previousStatus, request.status());
         applyAsset(asset, request);
         Asset saved = saveAsset(asset);
-        registerMovement(saved, MovementType.UPDATED, null, null, "system", "Atualizacao cadastral");
+        MovementType movementType = previousStatus == request.status() ? MovementType.UPDATED : MovementType.STATUS_CHANGED;
+        String reason = previousStatus == request.status()
+            ? "Atualizacao cadastral"
+            : "Status alterado de " + previousStatus.name() + " para " + request.status().name();
+        registerMovement(saved, movementType, null, null, actor, reason);
         return toAssetInventoryResponse(saved);
     }
 
-    public void deleteAsset(Long id) {
+    public AssetInventoryResponse voidAsset(Long id, String reason, String actor) {
         Asset asset = requireAsset(id);
-        assetAssignmentRepository.findByAssetIdAndStatus(id, AssignmentStatus.ACTIVE)
-            .ifPresent(assignment -> {
-                assignment.setStatus(AssignmentStatus.RETURNED);
-                assignment.setUnassignedAt(LocalDateTime.now());
-            });
-        assetRepository.delete(asset);
+        if (asset.getStatus() == AssetStatus.DISPOSED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Patrimonio baixado nao pode ser anulado");
+        }
+        if (asset.getStatus() == AssetStatus.VOIDED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Patrimonio ja esta anulado");
+        }
+        if (assetAssignmentRepository.existsByAssetId(id)
+            || assetDisposalItemRepository.existsByAsset_Id(id)
+            || responsibilityTermItemRepository.existsByAsset_Id(id)
+            || equipmentExchangeTermRepository.existsByRetiredAssetIdOrDeliveredAssetId(id, id)
+            || physicalCheckRepository.existsByAssetId(id)) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Patrimonio possui vinculos ou historico operacional e nao pode ser anulado"
+            );
+        }
+        asset.setStatus(AssetStatus.VOIDED);
+        asset.setVoidedAt(LocalDateTime.now());
+        asset.setVoidedBy(blankToNull(actor));
+        asset.setVoidReason(reason.trim());
+        Asset saved = assetRepository.save(asset);
+        registerMovement(saved, MovementType.VOIDED, null, null, actor, reason.trim());
+        return toAssetInventoryResponse(saved);
     }
 
     public AssetInventoryResponse linkAsset(Long assetId, Long stationId, String performedBy, String reason) {
+        ensureMovementReason(reason);
         Asset asset = requireAsset(assetId);
         Station station = requireStation(stationId);
-        if (asset.getStatus() == com.assetguardian.backend.domain.AssetStatus.DISPOSED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Patrimonio baixado nao pode ser vinculado");
+        if (asset.getStatus() == AssetStatus.DISPOSED || asset.getStatus() == AssetStatus.VOIDED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Patrimonio baixado ou anulado nao pode ser vinculado");
         }
         if (station.getStatus() == StationStatus.INACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estacao inativa nao pode receber patrimonio");
@@ -210,6 +247,7 @@ public class InventoryCommandService {
     }
 
     public AssetInventoryResponse unlinkAsset(Long assetId, String performedBy, String reason) {
+        ensureMovementReason(reason);
         Asset asset = requireAsset(assetId);
         AssetAssignment assignment = assetAssignmentRepository.findByAssetIdAndStatus(assetId, AssignmentStatus.ACTIVE)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Patrimonio nao possui vinculo ativo"));
@@ -222,7 +260,11 @@ public class InventoryCommandService {
     }
 
     public AssetInventoryResponse transferAsset(Long assetId, TransferAssetRequest request) {
+        ensureMovementReason(request.reason());
         Asset asset = requireAsset(assetId);
+        if (asset.getStatus() == AssetStatus.DISPOSED || asset.getStatus() == AssetStatus.VOIDED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Patrimonio baixado ou anulado nao pode ser transferido");
+        }
         AssetAssignment current = assetAssignmentRepository.findByAssetIdAndStatus(assetId, AssignmentStatus.ACTIVE)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Patrimonio nao possui vinculo ativo"));
         Station fromStation = current.getStation();
@@ -328,11 +370,7 @@ public class InventoryCommandService {
             });
 
         assetMovementRepository.findByFromStationIdOrToStationIdOrderByMovedAtDesc(stationId, stationId)
-            .forEach(movement -> events.add(new HistoryEventResponse(
-                movement.getMovementType().name(),
-                buildMovementDescription(movement),
-                movement.getMovedAt()
-            )));
+            .forEach(movement -> events.add(toHistoryResponse(movement)));
 
         return events.stream()
             .sorted(Comparator.comparing(HistoryEventResponse::timestamp).reversed())
@@ -342,12 +380,42 @@ public class InventoryCommandService {
     public List<HistoryEventResponse> getAssetHistory(Long assetId) {
         requireAsset(assetId);
         return assetMovementRepository.findByAssetIdOrderByMovedAtDesc(assetId).stream()
-            .map(movement -> new HistoryEventResponse(
-                movement.getMovementType().name(),
-                buildMovementDescription(movement),
-                movement.getMovedAt()
-            ))
+            .map(this::toHistoryResponse)
             .toList();
+    }
+
+    /** Listagem global de movimentacoes de localizacao (entradas, saidas e transferencias). */
+    public List<MovementResponse> listMovements() {
+        List<MovementType> types = List.of(
+            MovementType.LINKED, MovementType.UNLINKED, MovementType.TRANSFERRED, MovementType.EXCHANGED);
+        return assetMovementRepository.findByMovementTypeInOrderByMovedAtDesc(types).stream()
+            .map(this::toMovementResponse)
+            .toList();
+    }
+
+    private MovementResponse toMovementResponse(AssetMovement movement) {
+        Asset asset = movement.getAsset();
+        Station fromStation = movement.getFromStation();
+        Station toStation = movement.getToStation();
+        Employee fromEmployee = movement.getFromEmployee();
+        Employee toEmployee = movement.getToEmployee();
+        return new MovementResponse(
+            movement.getId(),
+            asset == null ? null : asset.getId(),
+            asset == null ? null : asset.getAssetCode(),
+            asset == null ? null : asset.getType(),
+            asset == null ? null : asset.getDescription(),
+            movement.getMovementType().name(),
+            movement.getMovedAt(),
+            fromStation == null ? null : fromStation.getCode(),
+            fromStation == null ? null : fromStation.getName(),
+            toStation == null ? null : toStation.getCode(),
+            toStation == null ? null : toStation.getName(),
+            fromEmployee == null ? null : fromEmployee.getFullName(),
+            toEmployee == null ? null : toEmployee.getFullName(),
+            movement.getMovedBy(),
+            movement.getReason()
+        );
     }
 
     private void applySpace(Space space, SpaceRequest request) {
@@ -360,6 +428,7 @@ public class InventoryCommandService {
     private void applyEmployee(Employee employee, EmployeeRequest request) {
         employee.setFullName(request.fullName().trim());
         employee.setCpf(blankToNull(request.cpf()));
+        employee.setJobTitle(blankToNull(request.jobTitle()));
         employee.setStatus(request.status());
         employee.setDepartment(request.departmentId() == null ? null : requireDepartment(request.departmentId()));
     }
@@ -392,11 +461,35 @@ public class InventoryCommandService {
         asset.setAcquisitionDate(request.acquisitionDate());
         asset.setFiscalNote(blankToNull(request.fiscalNote()));
         asset.setAccountingCategory(blankToNull(request.accountingCategory()));
+        asset.setAccountingGroup(blankToNull(request.accountingGroup()));
+        asset.setAccountingTreatment(blankToNull(request.accountingTreatment()));
         asset.setAcquisitionValue(request.acquisitionValue());
         asset.setDepreciationRate(request.depreciationRate());
         asset.setUsefulLifeYears(request.usefulLifeYears());
+        asset.setUsefulLifeMonths(request.usefulLifeMonths());
+        asset.setResidualValue(request.residualValue());
+        asset.setDepreciationStartDate(request.depreciationStartDate());
+        asset.setDepreciationMethod(blankToNull(request.depreciationMethod()));
         asset.setWarrantyUntil(request.warrantyUntil());
         asset.setNotes(blankToNull(request.notes()));
+        asset.setNfeAccessKey(blankToNull(request.nfeAccessKey()));
+        asset.setFiscalNoteSeries(blankToNull(request.fiscalNoteSeries()));
+        asset.setSupplierName(blankToNull(request.supplierName()));
+        asset.setAcquisitionBatch(blankToNull(request.acquisitionBatch()));
+        asset.setNfItemCode(blankToNull(request.nfItemCode()));
+        asset.setSupplierOrder(blankToNull(request.supplierOrder()));
+        asset.setInitialCondition(blankToNull(request.initialCondition()));
+        asset.setConditionGrade(blankToNull(request.conditionGrade()));
+        asset.setFunctionalStatus(blankToNull(request.functionalStatus()));
+        asset.setConditionNotes(blankToNull(request.conditionNotes()));
+        asset.setPartNumber(blankToNull(request.partNumber()));
+        asset.setRegulatoryModel(blankToNull(request.regulatoryModel()));
+        asset.setNcm(blankToNull(request.ncm()));
+        asset.setEan(blankToNull(request.ean()));
+        asset.setUpc(blankToNull(request.upc()));
+        asset.setColor(blankToNull(request.color()));
+        asset.setRam(blankToNull(request.ram()));
+        asset.setStorage(blankToNull(request.storage()));
     }
 
     private Department saveDepartment(Department department) {
@@ -437,10 +530,52 @@ public class InventoryCommandService {
         movement.setMovementType(type);
         movement.setFromStation(fromStation);
         movement.setToStation(toStation);
+        movement.setFromEmployee(currentResponsible(fromStation));
+        movement.setToEmployee(currentResponsible(toStation));
         movement.setMovedBy(blankToNull(performedBy));
         movement.setReason(blankToNull(reason));
         movement.setMovedAt(LocalDateTime.now());
         assetMovementRepository.save(movement);
+    }
+
+    private void ensureMovementReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o motivo da movimentacao patrimonial");
+        }
+    }
+
+    private Employee currentResponsible(Station station) {
+        if (station == null) {
+            return null;
+        }
+        return stationResponsibilityRepository.findByStationIdAndCurrentTrue(station.getId())
+            .map(StationResponsibility::getEmployee)
+            .orElse(null);
+    }
+
+    private HistoryEventResponse toHistoryResponse(AssetMovement movement) {
+        Employee fromEmployee = movement.getFromEmployee();
+        Employee toEmployee = movement.getToEmployee();
+        return new HistoryEventResponse(
+            movement.getMovementType().name(),
+            buildMovementDescription(movement),
+            movement.getMovedAt(),
+            movement.getFromStation() == null ? null : movement.getFromStation().getId(),
+            movement.getFromStation() == null ? null : movement.getFromStation().getCode(),
+            movement.getToStation() == null ? null : movement.getToStation().getId(),
+            movement.getToStation() == null ? null : movement.getToStation().getCode(),
+            fromEmployee == null ? null : fromEmployee.getId(),
+            fromEmployee == null ? null : fromEmployee.getFullName(),
+            fromEmployee == null || fromEmployee.getDepartment() == null ? null : fromEmployee.getDepartment().getName(),
+            toEmployee == null ? null : toEmployee.getId(),
+            toEmployee == null ? null : toEmployee.getFullName(),
+            toEmployee == null || toEmployee.getDepartment() == null ? null : toEmployee.getDepartment().getName(),
+            movement.getMovedBy(),
+            movement.getReason(),
+            movement.getSourceProcessType(),
+            movement.getSourceProcessId(),
+            movement.getSourceProcessNumber()
+        );
     }
 
     private Department requireDepartment(UUID id) {
@@ -491,6 +626,7 @@ public class InventoryCommandService {
             employee.getId(),
             employee.getFullName(),
             employee.getCpf(),
+            employee.getJobTitle(),
             employee.getStatus(),
             employee.getDepartment() == null ? null : employee.getDepartment().getId(),
             employee.getDepartment() == null ? null : employee.getDepartment().getName(),
@@ -562,13 +698,42 @@ public class InventoryCommandService {
             asset.getAcquisitionDate(),
             asset.getFiscalNote(),
             asset.getAccountingCategory(),
+            asset.getAccountingGroup(),
+            asset.getAccountingTreatment(),
             asset.getAcquisitionValue(),
             asset.getDepreciationRate(),
             asset.getUsefulLifeYears(),
+            asset.getUsefulLifeMonths(),
+            asset.getResidualValue(),
+            asset.getDepreciationStartDate(),
+            asset.getDepreciationMethod(),
+            asset.getPolicyVersion(),
             asset.getWarrantyUntil(),
+            asset.getNotes(),
             asset.getLastCheckAt(),
             asset.getLastCheckBy(),
-            asset.getLastCheckResult()
+            asset.getLastCheckResult(),
+            asset.getVoidedAt(),
+            asset.getVoidedBy(),
+            asset.getVoidReason(),
+            asset.getNfeAccessKey(),
+            asset.getFiscalNoteSeries(),
+            asset.getSupplierName(),
+            asset.getAcquisitionBatch(),
+            asset.getNfItemCode(),
+            asset.getSupplierOrder(),
+            asset.getInitialCondition(),
+            asset.getConditionGrade(),
+            asset.getFunctionalStatus(),
+            asset.getConditionNotes(),
+            asset.getPartNumber(),
+            asset.getRegulatoryModel(),
+            asset.getNcm(),
+            asset.getEan(),
+            asset.getUpc(),
+            asset.getColor(),
+            asset.getRam(),
+            asset.getStorage()
         );
     }
 
@@ -582,6 +747,9 @@ public class InventoryCommandService {
             case TRANSFERRED -> "Patrimonio " + assetCode + " transferido de " + safeStation(movement.getFromStation()) + " para " + safeStation(movement.getToStation());
             case STATUS_CHANGED -> "Status do patrimonio " + assetCode + " alterado";
             case INVENTORY_CHECKED -> "Conferencia registrada para " + assetCode;
+            case VOIDED -> "Cadastro do patrimonio " + assetCode + " anulado";
+            case EXCHANGED -> "Patrimonio " + assetCode + " movimentado pela troca "
+                + (movement.getSourceProcessNumber() == null ? "" : movement.getSourceProcessNumber());
         };
         return description + (movement.getMovedBy() == null ? "" : " · por " + movement.getMovedBy())
             + (movement.getReason() == null ? "" : " · " + movement.getReason());
@@ -596,5 +764,29 @@ public class InventoryCommandService {
             return null;
         }
         return value.trim();
+    }
+
+    private void ensureStatusCanBeSetOnCreate(AssetStatus status) {
+        if (status == AssetStatus.DISPOSED || status == AssetStatus.VOIDED) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Status BAIXADO ou ANULADO so pode ser produzido por processo formal"
+            );
+        }
+    }
+
+    private void ensureStatusCanBeChangedManually(AssetStatus current, AssetStatus requested) {
+        if (current == AssetStatus.VOIDED || current == AssetStatus.DISPOSED) {
+            if (current != requested) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status protegido nao pode ser alterado manualmente");
+            }
+            return;
+        }
+        if (requested == AssetStatus.DISPOSED || requested == AssetStatus.VOIDED) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Patrimonio so pode ser baixado pela finalizacao de uma baixa patrimonial"
+            );
+        }
     }
 }

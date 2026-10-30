@@ -9,6 +9,8 @@ public record AssetDisposalDocumentResponse(
     String fileName,
     String mimeType,
     String uploadedBy,
-    LocalDateTime uploadedAt
+    LocalDateTime uploadedAt,
+    Long disposalItemId,
+    String assetCode
 ) {
 }

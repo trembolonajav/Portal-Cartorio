@@ -3,6 +3,7 @@ package com.assetguardian.backend.api.dto;
 import com.assetguardian.backend.domain.CheckResult;
 import com.assetguardian.backend.domain.DivergenceType;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record PhysicalCheckResponse(
     Long id,
@@ -17,6 +18,7 @@ public record PhysicalCheckResponse(
     DivergenceType divergenceType,
     String note,
     String checkedBy,
-    LocalDateTime checkedAt
+    LocalDateTime checkedAt,
+    List<PhysicalCheckPhotoResponse> photos
 ) {
 }

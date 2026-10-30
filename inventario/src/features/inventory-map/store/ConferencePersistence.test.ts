@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 it('keeps the saved result if refreshing the inventory fails after persistence', async () => {
-  vi.mocked(inventoryApi.recordCheck).mockResolvedValue({ id: 1, assetId: 1, assetCode: 'P001', assetDescription: 'Monitor', stationId: 2, stationCode: 'A', expectedStationId: 2, expectedStationCode: 'A', result: 'NOT_FOUND', divergenceType: null, note: null, checkedBy: 'maria', checkedAt: '2026-09-11T10:00:00' });
+  vi.mocked(inventoryApi.recordCheck).mockResolvedValue({ id: 1, assetId: 1, assetCode: 'P001', assetDescription: 'Monitor', stationId: 2, stationCode: 'A', expectedStationId: 2, expectedStationCode: 'A', result: 'NOT_FOUND', divergenceType: null, note: null, checkedBy: 'maria', checkedAt: '2026-09-11T10:00:00', photos: [] });
   useInventoryStore.setState({ refreshAll: vi.fn().mockRejectedValue(new Error('offline')) });
   const result = await useInventoryStore.getState().recordCheck('1', { result: 'NOT_FOUND', stationId: '2' });
   expect(result.ok).toBe(true);

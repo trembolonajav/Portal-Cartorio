@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Pencil, Trash2, Package, MapPin, Plus, Unlink, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,13 +17,13 @@ import type { StationStatus } from '@/features/inventory-map/types/inventoryMap.
 import { toast } from 'sonner';
 import StationResponsible from './StationResponsible';
 
-const STATUS_LABELS: Record<StationStatus, string> = { ACTIVE: 'Ativa', INACTIVE: 'Inativa', MAINTENANCE: 'Manutenção' };
+const STATUS_LABELS: Record<StationStatus, string> = { ACTIVE: 'Ativa', INACTIVE: 'Inativa', MAINTENANCE: 'Em manutenção' };
 const STATUS_BADGE: Record<StationStatus, string> = {
   ACTIVE: 'border-success/30 bg-success/10 text-success',
   INACTIVE: 'border-border bg-muted text-muted-foreground',
   MAINTENANCE: 'border-brass/30 bg-brass/10 text-brass',
 };
-const ASSET_STATUS: Record<string, string> = { ACTIVE: 'Ativo', IN_STOCK: 'Em estoque', INACTIVE: 'Inativo', MAINTENANCE: 'Manutenção', DISPOSED: 'Baixado' };
+const ASSET_STATUS: Record<string, string> = { ACTIVE: 'Ativo', IN_STOCK: 'Em estoque', INACTIVE: 'Inativo', MAINTENANCE: 'Em manutenção', DISPOSED: 'Baixado', VOIDED: 'Anulado' };
 
 const StationSheet = ({ stationId, onClose }: { stationId: string; onClose: () => void }) => {
   const navigate = useNavigate();
@@ -51,26 +52,31 @@ const StationSheet = ({ stationId, onClose }: { stationId: string; onClose: () =
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [linking, setLinking] = useState<string | null>(null);
+  const [linkReason, setLinkReason] = useState('');
+  const [unlinkingAssetId, setUnlinkingAssetId] = useState<string | null>(null);
+  const [unlinkReason, setUnlinkReason] = useState('');
 
   // Só patrimônios sem estação: o mesmo item não pode estar vinculado a duas mesas.
   const available = useMemo(() => {
     const pq = pickerSearch.trim().toLowerCase();
     return allAssets
-      .filter((a) => a.status !== 'DISPOSED' && !getStationForAsset(a.id))
+      .filter((a) => a.status !== 'DISPOSED' && a.status !== 'VOIDED' && !getStationForAsset(a.id))
       .filter((a) => !pq || a.assetCode.toLowerCase().includes(pq) || a.description.toLowerCase().includes(pq))
       .slice(0, 60);
   }, [allAssets, pickerSearch, getStationForAsset]);
 
   const place = async (assetId: string) => {
+    if (!linkReason.trim()) { toast.error('Informe o motivo da vinculação'); return; }
     setLinking(assetId);
     try {
-      const res = await linkAsset(assetId, stationId);
+      const res = await linkAsset(assetId, stationId, linkReason.trim());
       if (res && res.ok === false) toast.error(res.error || 'Falha ao vincular');
-      else toast.success('Patrimônio vinculado');
+      else { toast.success('Patrimônio vinculado'); setLinkReason(''); }
     } finally { setLinking(null); }
   };
-  const removeItem = async (assetId: string) => {
-    try { await unlinkAsset(assetId); toast.success('Patrimônio desvinculado'); }
+  const removeItem = async () => {
+    if (!unlinkingAssetId || !unlinkReason.trim()) return;
+    try { await unlinkAsset(unlinkingAssetId, unlinkReason.trim()); toast.success('Patrimônio desvinculado'); setUnlinkingAssetId(null); setUnlinkReason(''); }
     catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao desvincular'); }
   };
 
@@ -157,6 +163,7 @@ const StationSheet = ({ stationId, onClose }: { stationId: string; onClose: () =
                       <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground/70" />
                       <Input autoFocus placeholder="Buscar patrimônio para vincular" value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} className="h-8 bg-card pl-8 text-[13px]" />
                     </div>
+                    <Textarea placeholder="Motivo da vinculação *" value={linkReason} onChange={event => setLinkReason(event.target.value)} className="min-h-[62px] bg-card text-[12px]" />
                     <div className="max-h-52 overflow-auto">
                       {available.length === 0 && <p className="px-1 py-2 text-[12px] italic text-muted-foreground">Nenhum patrimônio livre — todos já estão vinculados a alguma estação. Desvincule em outra estação ou cadastre um novo.</p>}
                       {available.map((a) => (
@@ -164,7 +171,7 @@ const StationSheet = ({ stationId, onClose }: { stationId: string; onClose: () =
                           <span className="num-mono text-primary">{a.assetCode}</span>
                           <span className="min-w-0 flex-1 truncate text-ink">{a.description}</span>
                           <span className="shrink-0 text-[11px] text-muted-foreground">{a.type}</span>
-                          <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]" disabled={linking === a.id} onClick={() => place(a.id)}>Vincular</Button>
+                          <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]" disabled={linking === a.id || !linkReason.trim()} onClick={() => place(a.id)}>Vincular</Button>
                         </div>
                       ))}
                     </div>
@@ -180,7 +187,7 @@ const StationSheet = ({ stationId, onClose }: { stationId: string; onClose: () =
                       <span className="truncate text-ink">{a.description}</span>
                     </button>
                     <span className="shrink-0 text-[11px] text-muted-foreground">{ASSET_STATUS[a.status] ?? a.status}</span>
-                    <button title="Desvincular" onClick={() => removeItem(a.id)} className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"><Unlink className="h-3.5 w-3.5" /></button>
+                    <button title="Desvincular" onClick={() => setUnlinkingAssetId(a.id)} className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"><Unlink className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
               </div>
@@ -188,6 +195,17 @@ const StationSheet = ({ stationId, onClose }: { stationId: string; onClose: () =
           )}
         </div>
       </aside>
+
+      <AlertDialog open={!!unlinkingAssetId} onOpenChange={open => { if (!open) { setUnlinkingAssetId(null); setUnlinkReason(''); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular patrimônio?</AlertDialogTitle>
+            <AlertDialogDescription>Informe o motivo para registrar esta movimentação no histórico do bem.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea placeholder="Motivo da desvinculação *" value={unlinkReason} onChange={event => setUnlinkReason(event.target.value)} className="min-h-[80px]" />
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction disabled={!unlinkReason.trim()} onClick={removeItem}>Desvincular</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmDel} onOpenChange={setConfirmDel}>
         <AlertDialogContent>

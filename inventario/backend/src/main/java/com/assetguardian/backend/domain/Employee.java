@@ -31,6 +31,9 @@ public class Employee {
     @Column(unique = true, length = 180)
     private String email;
 
+    @Column(name = "job_title", length = 160)
+    private String jobTitle;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private EmployeeStatus status;

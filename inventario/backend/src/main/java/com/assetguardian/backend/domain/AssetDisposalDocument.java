@@ -22,6 +22,10 @@ public class AssetDisposalDocument extends BaseEntity {
     @JoinColumn(name = "disposal_id", nullable = false)
     private AssetDisposal disposal;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "disposal_item_id")
+    private AssetDisposalItem disposalItem;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private AssetDisposalDocumentType type;

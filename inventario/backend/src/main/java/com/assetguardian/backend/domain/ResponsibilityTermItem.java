@@ -46,4 +46,13 @@ public class ResponsibilityTermItem extends BaseEntity {
 
     @Column(name = "status_snapshot", nullable = false, length = 20)
     private String statusSnapshot;
+
+    @Column(name = "condition_grade_snapshot", length = 30)
+    private String conditionGradeSnapshot;
+
+    @Column(name = "functional_status_snapshot", length = 30)
+    private String functionalStatusSnapshot;
+
+    @Column(name = "condition_notes_snapshot", length = 1000)
+    private String conditionNotesSnapshot;
 }

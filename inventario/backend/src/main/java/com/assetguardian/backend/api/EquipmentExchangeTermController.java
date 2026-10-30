@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,13 +37,13 @@ public class EquipmentExchangeTermController {
     }
 
     @PostMapping
-    public EquipmentExchangeTermResponse create(@Valid @RequestBody EquipmentExchangeTermCreateRequest request) {
-        return service.create(request);
+    public EquipmentExchangeTermResponse create(@Valid @RequestBody EquipmentExchangeTermCreateRequest request, Authentication authentication) {
+        return service.create(request, authentication.getName());
     }
 
     @PostMapping("/{id}/generate-term")
-    public EquipmentExchangeTermResponse generateTerm(@PathVariable Long id, @RequestParam(required = false) String username) {
-        return service.generateTerm(id, username);
+    public EquipmentExchangeTermResponse generateTerm(@PathVariable Long id, @RequestParam(required = false) String username, Authentication authentication) {
+        return service.generateTerm(id, authentication.getName());
     }
 
     @GetMapping("/{id}/term")
@@ -57,14 +58,20 @@ public class EquipmentExchangeTermController {
     public EquipmentExchangeTermResponse uploadSignedTerm(
         @PathVariable Long id,
         @RequestParam("file") MultipartFile file,
-        @RequestParam(required = false) String username
+        @RequestParam(required = false) String username,
+        Authentication authentication
     ) {
-        return service.uploadSignedTerm(id, file, username);
+        return service.uploadSignedTerm(id, file, authentication.getName());
     }
 
     @PostMapping("/{id}/activate")
-    public EquipmentExchangeTermResponse activate(@PathVariable Long id, @RequestParam(required = false) String username) {
-        return service.activate(id, username);
+    public EquipmentExchangeTermResponse activate(@PathVariable Long id, @RequestParam(required = false) String username, Authentication authentication) {
+        return service.activate(id, authentication.getName());
+    }
+
+    @PostMapping("/{id}/complete")
+    public EquipmentExchangeTermResponse complete(@PathVariable Long id, Authentication authentication) {
+        return service.complete(id, authentication.getName());
     }
 
     @PostMapping("/{id}/cancel")

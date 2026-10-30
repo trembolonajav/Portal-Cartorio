@@ -70,6 +70,27 @@ public class EquipmentExchangeTerm extends BaseEntity {
     @Column(length = 160)
     private String reason;
 
+    @Column(name = "reported_problem", length = 2000)
+    private String reportedProblem;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "inspection_result", length = 30)
+    private EquipmentExchangeInspectionResult inspectionResult;
+
+    @Column(length = 2000)
+    private String diagnosis;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "returned_condition", length = 30)
+    private EquipmentExchangeCondition returnedCondition;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "retired_destination", length = 40)
+    private EquipmentExchangeRetiredDestination retiredDestination;
+
+    @Column(name = "technician_name", length = 160)
+    private String technicianName;
+
     @Column(length = 4000)
     private String notes;
 
@@ -81,6 +102,9 @@ public class EquipmentExchangeTerm extends BaseEntity {
 
     @Column(name = "active_since")
     private LocalDateTime activeSince;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
 
     @Column(name = "cancel_reason", length = 2000)
     private String cancelReason;

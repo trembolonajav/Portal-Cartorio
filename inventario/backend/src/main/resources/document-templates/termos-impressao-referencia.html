@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  doc-page:not(:defined) { visibility:hidden }
+  body { margin:0; font-family:'Instrument Sans',Helvetica,sans-serif; color:#1B2430; }
+  a { color:#00234B } a:hover { color:#A87413 }
+</style>
+<script src="./doc-page.js"></script>
+</helmet>
+
+<doc-page size="a4">
+
+  <!-- ============ 1. FOLHA DE ASSINATURA DA BAIXA ============ -->
+  <section class="page" data-screen-label="01 Folha de assinatura da baixa" style="box-sizing:border-box; padding:36pt 44pt 26pt; display:flex; flex-direction:column">
+    <div style="border-bottom:1.5pt solid #00234B; padding-bottom:8pt; margin-bottom:14pt; text-align:center">
+      <img src="assets/logo-cartorio.png" alt="Cartório Índio Artiaga · 4º Tabelionato de Notas" style="width:128pt; height:auto; display:block; margin:0 auto">
+      <div style="margin-top:5pt; font-size:7.8pt; color:#6B7480">Goiânia — GO · Departamento de Tecnologia da Informação</div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16pt; margin-bottom:12pt">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:7.5pt; letter-spacing:.14em; text-transform:uppercase; color:#8A6E32; margin-bottom:3pt">Baixa patrimonial · folha de assinatura</div>
+        <h1 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:21pt; font-weight:600; color:#00234B; margin:0; line-height:1.05">Termo de Baixa de Patrimônio</h1>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11pt; color:#00234B; border:0.8pt solid #00234B; padding:4pt 8pt">{{ baixa.numero }}</div>
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; margin-bottom:11pt">
+      <tbody>
+        <tr>
+          <th style="width:92pt; text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Data de emissão</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">{{ baixa.data }}</td>
+          <th style="width:80pt; text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Motivo</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">{{ baixa.motivo }}</td>
+        </tr>
+        <tr>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Composição</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">{{ baixa.composicao }}</td>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Autorização</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">{{ segundo }}</td>
+        </tr>
+        <tr>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Destinação</th>
+          <td colspan="3" style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt; line-height:1.45">{{ baixa.destino }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin:0 0 11pt; font-size:9pt; line-height:1.55; text-align:justify">Declaramos ciência e aprovação da baixa patrimonial nº <strong>{{ baixa.numero }}</strong>, referente aos bens relacionados abaixo. A avaliação técnica, as fotografias, as justificativas por item e o histórico do processo constam do termo completo, arquivado digitalmente no Sistema de Inventário Patrimonial, que integra esta folha para todos os efeitos.</p>
+
+    <div style="display:grid; grid-template-columns:24pt 60pt 78pt 1fr 62pt; background:#00234B; color:#fff">
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Nº</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Patrimônio</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Categoria</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Descrição</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Local</span>
+    </div>
+    <sc-for list="{{ baixa.itens }}" as="it" hint-placeholder-count="14">
+      <div style="{{ it.row }}">
+        <span style="padding:3.6pt 6pt; font-size:8pt; font-family:'IBM Plex Mono',monospace; color:#6B7480">{{ it.n }}</span>
+        <span style="padding:3.6pt 6pt; font-size:8pt; font-family:'IBM Plex Mono',monospace">{{ it.pat }}</span>
+        <span style="padding:3.6pt 6pt; font-size:8pt; color:#3D4653">{{ it.cat }}</span>
+        <span style="padding:3.6pt 6pt; font-size:8pt">{{ it.desc }}</span>
+        <span style="padding:3.6pt 6pt; font-size:8pt; color:#6B7480">{{ it.local }}</span>
+      </div>
+    </sc-for>
+    <p style="margin:7pt 0 0; font-size:7.8pt; color:#6B7480; line-height:1.45">Patrimônios iniciados por S/N não possuem etiqueta física; o identificador foi atribuído pelo sistema. O termo completo ({{ baixa.paginas }}) pode ser consultado no sistema pelo número da baixa.</p>
+
+    <div style="margin-top:auto; padding-top:18pt">
+      <p style="margin:0 0 30pt; font-size:9pt">Goiânia, ______ de __________________ de __________.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:30pt">
+        <div>
+          <div style="border-top:0.7pt solid #1B2430; padding-top:4pt; font-size:8.6pt; font-weight:600">Departamento de Tecnologia da Informação</div>
+          <div style="font-size:7.8pt; color:#6B7480; margin-top:2pt">Conferência e abertura da baixa</div>
+          <div style="font-size:7.8pt; color:#3D4653; margin-top:8pt">Nome: ____________________________________</div>
+        </div>
+        <div>
+          <div style="border-top:0.7pt solid #1B2430; padding-top:4pt; font-size:8.6pt; font-weight:600">{{ segundo }}</div>
+          <div style="font-size:7.8pt; color:#6B7480; margin-top:2pt">Autorização da baixa patrimonial</div>
+          <div style="font-size:7.8pt; color:#3D4653; margin-top:8pt">Nome: ____________________________________</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16pt; padding-top:6pt; border-top:0.5pt solid #E4E0DB; display:flex; justify-content:space-between; gap:12pt; font-size:7pt; color:#6B7480">
+      <span>Cartório Índio Artiaga · 4º Tabelionato de Notas · documento gerado pelo Sistema de Inventário Patrimonial</span>
+      <span style="font-family:'IBM Plex Mono',monospace">{{ baixa.numero }} | 1/1</span>
+    </div>
+  </section>
+
+  <!-- ============ 2. TERMO DE RESPONSABILIDADE ============ -->
+  <section class="page" data-screen-label="02 Termo de responsabilidade" style="box-sizing:border-box; padding:36pt 44pt 26pt; display:flex; flex-direction:column">
+    <div style="border-bottom:1.5pt solid #00234B; padding-bottom:8pt; margin-bottom:14pt; text-align:center">
+      <img src="assets/logo-cartorio.png" alt="Cartório Índio Artiaga · 4º Tabelionato de Notas" style="width:128pt; height:auto; display:block; margin:0 auto">
+      <div style="margin-top:5pt; font-size:7.8pt; color:#6B7480">Goiânia — GO · Departamento de Tecnologia da Informação</div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16pt; margin-bottom:12pt">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:7.5pt; letter-spacing:.14em; text-transform:uppercase; color:#8A6E32; margin-bottom:3pt">Entrega de bens patrimoniais</div>
+        <h1 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:21pt; font-weight:600; color:#00234B; margin:0; line-height:1.05">Termo de Responsabilidade Patrimonial</h1>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11pt; color:#00234B; border:0.8pt solid #00234B; padding:4pt 8pt">TR-2026-0001</div>
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; margin-bottom:14pt">
+      <tbody>
+        <tr>
+          <th style="width:82pt; text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Responsável</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt; font-weight:600">Ana Paula de Souza</td>
+          <th style="width:82pt; text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Setor</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">Atendimento</td>
+        </tr>
+        <tr>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Cargo / função</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">Escrevente autorizada</td>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Estação</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">P-014 · Balcão 03</td>
+        </tr>
+        <tr>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Data de entrega</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">28/09/2026</td>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Emitido por</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">Carlos Mendes · T.I.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:14pt; font-weight:600; color:#00234B; margin:0 0 6pt">1. Bens entregues</h2>
+    <div style="display:grid; grid-template-columns:62pt 1fr 1fr 82pt 50pt; background:#00234B; color:#fff">
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Patrimônio</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Equipamento</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Marca / modelo</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Nº de série</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Estado</span>
+    </div>
+    <sc-for list="{{ resp }}" as="r" hint-placeholder-count="3">
+      <div style="display:grid; grid-template-columns:62pt 1fr 1fr 82pt 50pt; border-bottom:0.5pt solid #E4E0DB">
+        <span style="padding:5pt 6pt; font-size:8.3pt; font-family:'IBM Plex Mono',monospace">{{ r.pat }}</span>
+        <span style="padding:5pt 6pt; font-size:8.3pt">{{ r.eq }}</span>
+        <span style="padding:5pt 6pt; font-size:8.3pt; color:#3D4653">{{ r.mm }}</span>
+        <span style="padding:5pt 6pt; font-size:8.3pt; font-family:'IBM Plex Mono',monospace; color:#3D4653">{{ r.sn }}</span>
+        <span style="padding:5pt 6pt; font-size:8.3pt">{{ r.est }}</span>
+      </div>
+    </sc-for>
+    <p style="margin:5pt 0 14pt; font-size:8pt; color:#6B7480">Quantidade conferida na entrega: 3 (três) bens · divergências: nenhuma.</p>
+
+    <h2 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:14pt; font-weight:600; color:#00234B; margin:0 0 6pt">2. Compromissos do responsável</h2>
+    <p style="margin:0 0 6pt; font-size:9pt; line-height:1.55; text-align:justify">Declaro que recebi os bens relacionados acima, de propriedade da serventia, em perfeitas condições de uso, e assumo o compromisso de:</p>
+    <div style="display:flex; flex-direction:column; gap:3.5pt">
+      <sc-for list="{{ compromissos }}" as="c" hint-placeholder-count="6">
+        <div style="display:grid; grid-template-columns:16pt 1fr; font-size:8.8pt; line-height:1.5">
+          <span style="font-family:'IBM Plex Mono',monospace; color:#8A6E32">{{ c.n }}</span>
+          <span style="text-align:justify">{{ c.t }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <p style="margin:8pt 0 0; font-size:9pt; line-height:1.55; text-align:justify">A responsabilidade sobre os bens cessa com a devolução registrada pelo Departamento de Tecnologia da Informação, mediante termo de troca ou de devolução.</p>
+
+    <div style="margin-top:auto; padding-top:16pt">
+      <p style="margin:0 0 30pt; font-size:9pt">Goiânia, 28 de setembro de 2026.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:30pt">
+        <div>
+          <div style="border-top:0.7pt solid #1B2430; padding-top:4pt; font-size:8.6pt; font-weight:600">Ana Paula de Souza</div>
+          <div style="font-size:7.8pt; color:#6B7480; margin-top:2pt">Responsável pelos bens</div>
+        </div>
+        <div>
+          <div style="border-top:0.7pt solid #1B2430; padding-top:4pt; font-size:8.6pt; font-weight:600">Carlos Mendes</div>
+          <div style="font-size:7.8pt; color:#6B7480; margin-top:2pt">Departamento de Tecnologia da Informação</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16pt; padding-top:6pt; border-top:0.5pt solid #E4E0DB; display:flex; justify-content:space-between; gap:12pt; font-size:7pt; color:#6B7480">
+      <span>Cartório Índio Artiaga · 4º Tabelionato de Notas · documento gerado pelo Sistema de Inventário Patrimonial</span>
+      <span style="font-family:'IBM Plex Mono',monospace">TR-2026-0001 | 1/1</span>
+    </div>
+  </section>
+
+  <!-- ============ 3. TERMO DE TROCA ============ -->
+  <section class="page" data-screen-label="03 Termo de troca de equipamento" style="box-sizing:border-box; padding:36pt 44pt 26pt; display:flex; flex-direction:column">
+    <div style="border-bottom:1.5pt solid #00234B; padding-bottom:8pt; margin-bottom:14pt; text-align:center">
+      <img src="assets/logo-cartorio.png" alt="Cartório Índio Artiaga · 4º Tabelionato de Notas" style="width:128pt; height:auto; display:block; margin:0 auto">
+      <div style="margin-top:5pt; font-size:7.8pt; color:#6B7480">Goiânia — GO · Departamento de Tecnologia da Informação</div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16pt; margin-bottom:12pt">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:7.5pt; letter-spacing:.14em; text-transform:uppercase; color:#8A6E32; margin-bottom:3pt">Substituição de bem patrimonial</div>
+        <h1 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:21pt; font-weight:600; color:#00234B; margin:0; line-height:1.05">Termo de Troca de Equipamento</h1>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11pt; color:#00234B; border:0.8pt solid #00234B; padding:4pt 8pt">TE-2026-0001</div>
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; margin-bottom:14pt">
+      <tbody>
+        <tr>
+          <th style="width:82pt; text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Responsável</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt; font-weight:600">João Ferreira Costa</td>
+          <th style="width:82pt; text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Setor</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">Reconhecimento de Firmas</td>
+        </tr>
+        <tr>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Estação</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">P-022 · Mesa 05</td>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Chamado</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt; font-family:'IBM Plex Mono',monospace">CH-2026-0184</td>
+        </tr>
+        <tr>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Data da troca</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">28/09/2026</td>
+          <th style="text-align:left; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">Técnico</th>
+          <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt">Carlos Mendes · T.I.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:14pt; font-weight:600; color:#00234B; margin:0 0 6pt">1. Equipamentos envolvidos</h2>
+    <div style="display:grid; grid-template-columns:58pt 62pt 1fr 1fr 82pt; background:#00234B; color:#fff">
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Movimento</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Patrimônio</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Equipamento</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Marca / modelo</span>
+      <span style="padding:4.5pt 6pt; font-size:7.8pt; font-weight:600">Nº de série</span>
+    </div>
+    <sc-for list="{{ troca }}" as="t" hint-placeholder-count="2">
+      <div style="display:grid; grid-template-columns:58pt 62pt 1fr 1fr 82pt; border-bottom:0.5pt solid #E4E0DB; align-items:center">
+        <span style="padding:5pt 6pt"><span style="{{ t.tag }}">{{ t.mov }}</span></span>
+        <span style="padding:5pt 6pt; font-size:8.3pt; font-family:'IBM Plex Mono',monospace">{{ t.pat }}</span>
+        <span style="padding:5pt 6pt; font-size:8.3pt">{{ t.eq }}</span>
+        <span style="padding:5pt 6pt; font-size:8.3pt; color:#3D4653">{{ t.mm }}</span>
+        <span style="padding:5pt 6pt; font-size:8.3pt; font-family:'IBM Plex Mono',monospace; color:#3D4653">{{ t.sn }}</span>
+      </div>
+    </sc-for>
+
+    <h2 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:14pt; font-weight:600; color:#00234B; margin:14pt 0 6pt">2. Registro técnico</h2>
+    <table style="width:100%; border-collapse:collapse">
+      <tbody>
+        <sc-for list="{{ registro }}" as="r" hint-placeholder-count="5">
+          <tr>
+            <th style="width:120pt; text-align:left; vertical-align:top; background:#FAF9F7; border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8pt; color:#3D4653">{{ r.k }}</th>
+            <td style="border:0.5pt solid #E4E0DB; padding:5pt 7pt; font-size:8.5pt; line-height:1.45">{{ r.v }}</td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+
+    <h2 style="font-family:'Cormorant Garamond',Georgia,serif; font-size:14pt; font-weight:600; color:#00234B; margin:14pt 0 6pt">3. Declaração</h2>
+    <p style="margin:0 0 6pt; font-size:9pt; line-height:1.55; text-align:justify">Declaro que devolvi ao Departamento de Tecnologia da Informação o equipamento de patrimônio nº <strong>0215</strong> e recebi, em substituição, o equipamento de patrimônio nº <strong>0489</strong>, em perfeitas condições de funcionamento. A partir desta data, o bem substituto passa a integrar o meu Termo de Responsabilidade Patrimonial, nas mesmas condições nele estabelecidas, e o bem devolvido deixa de estar sob minha responsabilidade.</p>
+    <p style="margin:0; font-size:8pt; line-height:1.5; color:#6B7480; text-align:justify">Registro no inventário: o bem devolvido é desvinculado da estação P-022 e encaminhado à manutenção; o substituto é vinculado à mesma estação e ao mesmo responsável na conclusão deste termo.</p>
+
+    <div style="margin-top:auto; padding-top:16pt">
+      <p style="margin:0 0 30pt; font-size:9pt">Goiânia, 28 de setembro de 2026.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:30pt">
+        <div>
+          <div style="border-top:0.7pt solid #1B2430; padding-top:4pt; font-size:8.6pt; font-weight:600">João Ferreira Costa</div>
+          <div style="font-size:7.8pt; color:#6B7480; margin-top:2pt">Responsável pelo equipamento</div>
+        </div>
+        <div>
+          <div style="border-top:0.7pt solid #1B2430; padding-top:4pt; font-size:8.6pt; font-weight:600">Carlos Mendes</div>
+          <div style="font-size:7.8pt; color:#6B7480; margin-top:2pt">Departamento de Tecnologia da Informação</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16pt; padding-top:6pt; border-top:0.5pt solid #E4E0DB; display:flex; justify-content:space-between; gap:12pt; font-size:7pt; color:#6B7480">
+      <span>Cartório Índio Artiaga · 4º Tabelionato de Notas · documento gerado pelo Sistema de Inventário Patrimonial</span>
+      <span style="font-family:'IBM Plex Mono',monospace">TE-2026-0001 | 1/1</span>
+    </div>
+  </section>
+
+</doc-page>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;segundoSignatario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Tabelião Substituto&quot;,&quot;Administradora do Cartório&quot;],&quot;default&quot;:&quot;Tabelião Substituto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Folha de assinatura&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const itens = [
+      ['0092', 'Desktop', 'Computador Dell Dimension 1100'],
+      ['0120', 'Desktop', 'Computador Dell Dimension 1100'],
+      ['0156', 'Desktop', 'Computador Dell Inspiron 530'],
+      ['0055', 'Desktop', 'Computador Dell OptiPlex 330'],
+      ['0037', 'Desktop', 'Computador Dell OptiPlex 330'],
+      ['1176', 'Desktop', 'Computador Dell Vostro 230'],
+      ['0187', 'Notebook', 'Notebook HP Pavilion ze4400'],
+      ['S/N-0126', 'Desktop', 'Computador Dell XPS 8300'],
+      ['0095', 'Desktop', 'Computador Dell Studio XPS 8100'],
+      ['0840', 'Switch de rede', 'Switch Intelbras SF 2400 QR, 24 portas'],
+      ['0321', 'Switch de rede', 'Switch SMC EZ Switch 10/100 1024DT, 24 portas'],
+      ['0175', 'Impressora', 'Impressora HP Color LaserJet 2600n'],
+      ['S/N-0127', 'Rack de parede', 'Rack de parede branco para equipamentos de rede'],
+      ['S/N-0128', 'Rack de parede', 'Rack de parede preto para equipamentos de rede'],
+    ];
+    const tag = (bg, fg) => 'display:inline-block; font-size:7.3pt; font-weight:600; padding:1.5pt 5pt; border:0.5pt solid ' + fg + '; color:' + fg + '; background:' + bg;
+    return {
+      segundo: this.props.segundoSignatario ?? 'Tabelião Substituto',
+      baixa: {
+        numero: 'BP-2026-0010',
+        data: '25/09/2026',
+        motivo: 'Obsolescência',
+        composicao: '14 patrimônios · 0 materiais sem patrimônio',
+        destino: 'Descarte eletroeletrônico especializado e reciclagem de componentes metálicos e plásticos, conforme a Lei nº 12.305/2010.',
+        paginas: '9 páginas',
+        itens: itens.map((r, i) => ({
+          n: String(i + 1).padStart(2, '0'), pat: r[0], cat: r[1], desc: r[2], local: '—',
+          row: 'display:grid; grid-template-columns:24pt 60pt 78pt 1fr 62pt; border-bottom:0.5pt solid #E4E0DB; background:' + (i % 2 ? '#FAF9F7' : '#fff'),
+        })),
+      },
+      resp: [
+        { pat: '0312', eq: 'Notebook corporativo', mm: 'Dell Latitude 5420', sn: 'DL5420-7K2M', est: 'Bom' },
+        { pat: '0421', eq: 'Teclado USB', mm: 'Logitech K120', sn: 'K120-90314', est: 'Bom' },
+        { pat: '0422', eq: 'Mouse USB', mm: 'Logitech M90', sn: 'M90-77108', est: 'Bom' },
+      ],
+      compromissos: [
+        { n: 'I', t: 'zelar pela guarda e conservação dos bens, utilizando-os exclusivamente nas atividades da serventia;' },
+        { n: 'II', t: 'não emprestar, ceder, trocar ou retirar os bens das dependências do cartório sem autorização do Departamento de T.I.;' },
+        { n: 'III', t: 'não instalar programas, alterar configurações ou conectar dispositivos não homologados pelo Departamento de T.I.;' },
+        { n: 'IV', t: 'comunicar imediatamente ao Departamento de T.I. qualquer defeito, dano, furto, extravio ou mudança de estação;' },
+        { n: 'V', t: 'devolver os bens quando solicitado, em caso de substituição, mudança de função, afastamento ou desligamento;' },
+        { n: 'VI', t: 'responder por danos causados por dolo ou culpa, apurados na forma da legislação aplicável.' },
+      ],
+      troca: [
+        { mov: 'Devolvido', tag: tag('#FBEDEC', '#B4342B'), pat: '0215', eq: 'Teclado USB', mm: 'Logitech K120', sn: 'K120-11872' },
+        { mov: 'Entregue', tag: tag('#EAF3ED', '#2F7A54'), pat: '0489', eq: 'Teclado USB', mm: 'Logitech K120', sn: 'K120-88731' },
+      ],
+      registro: [
+        { k: 'Problema relatado', v: 'Falhas intermitentes e desgaste acentuado nas teclas A, S e E.' },
+        { k: 'Diagnóstico', v: 'Defeito confirmado em vistoria: desgaste físico incompatível com o uso regular.' },
+        { k: 'Providência', v: 'Substituição do equipamento por outro de mesmo modelo.' },
+        { k: 'Estado do devolvido', v: 'Danificado, porém completo (cabo e conector íntegros).' },
+        { k: 'Destino do devolvido', v: 'Manutenção para avaliação técnica; em caso de inviabilidade, inclusão em processo de baixa.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

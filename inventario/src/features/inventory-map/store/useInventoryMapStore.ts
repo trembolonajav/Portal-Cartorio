@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { inventoryApi } from '@/lib/inventory-api';
 import type { LayoutElement, EditorMode, ElementType, Layout } from '../types/inventoryMap.types';
 import { mockLayout } from '../data/mockData';
+import { boundingBox, getWallGeometry, withWallPolyline, DEFAULT_WALL_THICKNESS, type Point } from '../lib/wallGeometry';
 
 const genId = (existingIds: Set<string>) => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -100,6 +101,8 @@ interface InventoryMapState {
   cancelPlacing: () => void;
 
   addElement: (x: number, y: number) => void;
+  addWall: (points: Point[], thickness?: number) => void;
+  moveWall: (id: string, dx: number, dy: number) => void;
   moveElement: (id: string, x: number, y: number) => void;
   updateElement: (id: string, updates: Partial<LayoutElement>) => void;
   rotateElement: (id: string) => void;
@@ -128,7 +131,7 @@ const defaultsForType = (type: ElementType): Partial<LayoutElement> => {
 const normalizeLayout = (layout: Layout): Layout => ({
   ...layout,
   id: layout.id || `layout-${layout.spaceId || 'default'}`,
-  elements: separateTouchingDesks(ensureUniqueElementIds(layout.elements)).sort((a, b) => a.zIndex - b.zIndex),
+  elements: separateTouchingDesks(ensureUniqueElementIds(layout.elements.map(withWallPolyline))).sort((a, b) => a.zIndex - b.zIndex),
 });
 
 export const useInventoryMapStore = create<InventoryMapState>((set, get) => ({
@@ -175,6 +178,43 @@ export const useInventoryMapStore = create<InventoryMapState>((set, get) => ({
       layout: normalizeLayout({ ...s.layout, elements: [...s.layout.elements, el] }),
       placingType: null,
       selectedElementId: el.id,
+    }));
+  },
+
+  addWall: (points, thickness = DEFAULT_WALL_THICKNESS) => {
+    if (points.length < 2) return;
+    const existingIds = new Set(get().layout.elements.map((element) => element.id));
+    const bb = boundingBox(points);
+    const el: LayoutElement = {
+      id: genId(existingIds),
+      elementType: 'WALL',
+      x: bb.x,
+      y: bb.y,
+      width: bb.width,
+      height: bb.height,
+      rotation: 0,
+      layer: 'structural',
+      zIndex: 1,
+      metadata: { points, thickness },
+    };
+    set((s) => ({
+      layout: normalizeLayout({ ...s.layout, elements: [...s.layout.elements, el] }),
+      selectedElementId: el.id,
+    }));
+  },
+
+  moveWall: (id, dx, dy) => {
+    set((s) => ({
+      layout: normalizeLayout({
+        ...s.layout,
+        elements: s.layout.elements.map((el) => {
+          if (el.id !== id || el.elementType !== 'WALL') return el;
+          const geom = getWallGeometry(el);
+          const points = geom.points.map((p) => [p[0] + dx, p[1] + dy] as Point);
+          const bb = boundingBox(points);
+          return { ...el, x: bb.x, y: bb.y, width: bb.width, height: bb.height, metadata: { ...el.metadata, points, thickness: geom.thickness } };
+        }),
+      }),
     }));
   },
 

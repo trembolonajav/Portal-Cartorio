@@ -10,6 +10,9 @@ public record ResponsibilityTermItemResponse(
     String model,
     String serialNumber,
     String station,
-    String status
+    String status,
+    String conditionGrade,
+    String functionalStatus,
+    String conditionNotes
 ) {
 }

@@ -29,6 +29,9 @@ public class ResponsibilityTerm extends BaseEntity {
     @Column(name = "employee_name_snapshot", nullable = false, length = 160)
     private String employeeNameSnapshot;
 
+    @Column(name = "employee_job_title_snapshot", length = 160)
+    private String employeeJobTitleSnapshot;
+
     @Column(name = "department_snapshot", length = 160)
     private String departmentSnapshot;
 

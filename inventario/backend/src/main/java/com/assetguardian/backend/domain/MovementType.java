@@ -7,5 +7,7 @@ public enum MovementType {
     UNLINKED,
     TRANSFERRED,
     STATUS_CHANGED,
-    INVENTORY_CHECKED
+    INVENTORY_CHECKED,
+    VOIDED,
+    EXCHANGED
 }

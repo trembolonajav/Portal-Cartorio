@@ -1,7 +1,8 @@
 import { ConferenceHistory, checkLabel, conferenceDate } from "@/components/ConferenceHistory";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Search, Check, AlertTriangle, X, Plus, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Search, Check, AlertTriangle, X, Plus, Loader2, CheckCircle2, Camera, Trash2 } from "lucide-react";
+import { inventoryApi } from "@/lib/inventory-api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ const DIVERGENCIAS: { value: DivergenceType; label: string }[] = [
 const SITUACOES: { value: AssetStatus; label: string }[] = [
   { value: "ACTIVE", label: "Ativo" },
   { value: "IN_STOCK", label: "Em estoque" },
-  { value: "MAINTENANCE", label: "Manutenção" },
+  { value: "MAINTENANCE", label: "Em manutenção" },
   { value: "INACTIVE", label: "Inativo" },
 ];
 
@@ -54,6 +55,27 @@ const ConferenciaEstacaoPage = () => {
   const [divAsset, setDivAsset] = useState<Asset | null>(null);
   const [divType, setDivType] = useState<DivergenceType>("WRONG_LOCATION");
   const [divNote, setDivNote] = useState("");
+
+  // Captura de fotos (provas) — compartilhada pelos diálogos de Encontrado e Divergência.
+  const [foundAsset, setFoundAsset] = useState<Asset | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const triggerCamera = () => fileInputRef.current?.click();
+  const onPickPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length) setPhotos((prev) => [...prev, ...files]);
+    e.target.value = "";
+  };
+  const removePhoto = (idx: number) => setPhotos((prev) => prev.filter((_, i) => i !== idx));
+  const uploadPhotos = async (checkId?: number) => {
+    if (!checkId || photos.length === 0) return;
+    for (const f of photos) {
+      try { await inventoryApi.uploadCheckPhoto(checkId, f); }
+      catch { toast.warning("Uma foto não pôde ser enviada."); }
+    }
+  };
 
   // Fluxo único "Adicionar patrimônio": digita o código -> existe? traz/vincula : cadastra.
   const [addOpen, setAddOpen] = useState(false);
@@ -89,22 +111,40 @@ const ConferenciaEstacaoPage = () => {
     } finally { setBusyId(null); }
   };
 
+  const openFound = (asset: Asset) => { setFoundAsset(asset); setPhotos([]); };
+  const closeFound = () => { setFoundAsset(null); setPhotos([]); };
+  const confirmFound = async () => {
+    if (!foundAsset) return;
+    if (photos.length === 0) { toast.error("Tire ao menos uma foto do item com a etiqueta do patrimônio."); return; }
+    setUploading(true); setBusyId(foundAsset.id);
+    try {
+      const res = await recordCheck(foundAsset.id, { result: "FOUND", stationId: station.id });
+      if (!res.ok) { toast.error(res.error || "Falha ao registrar"); return; }
+      await uploadPhotos(res.checkId);
+      toast.success(`${foundAsset.assetCode} encontrado${photos.length ? ` · ${photos.length} foto(s)` : ""}`);
+      closeFound();
+    } finally { setUploading(false); setBusyId(null); }
+  };
+
   const confirmDivergence = async () => {
     if (!divAsset) return;
-    setBusyId(divAsset.id);
+    if (photos.length === 0) { toast.error("Tire ao menos uma foto comprovando a divergência."); return; }
+    setUploading(true); setBusyId(divAsset.id);
     try {
       const res = await recordCheck(divAsset.id, {
         result: "DIVERGENCE", divergenceType: divType, stationId: station.id,
         note: divNote.trim() || undefined,
       });
-      if (res.ok) toast.success(`Divergência registrada para ${divAsset.assetCode}`);
-      else { toast.error(res.error || "Falha ao registrar divergência"); return; }
-      setDivAsset(null); setDivNote(""); setDivType("WRONG_LOCATION");
-    } finally { setBusyId(null); }
+      if (!res.ok) { toast.error(res.error || "Falha ao registrar divergência"); return; }
+      await uploadPhotos(res.checkId);
+      toast.success(`Divergência registrada para ${divAsset.assetCode}${photos.length ? ` · ${photos.length} foto(s)` : ""}`);
+      setDivAsset(null); setDivNote(""); setDivType("WRONG_LOCATION"); setPhotos([]);
+    } finally { setUploading(false); setBusyId(null); }
   };
 
   const createNovo = async () => {
     if (!novo.assetCode.trim() || !novo.type.trim()) { toast.error("Informe ao menos código e categoria"); return; }
+    if (photos.length === 0) { toast.error("Tire ao menos uma foto do item com a etiqueta do patrimônio."); return; }
     setSavingNovo(true);
     try {
       const description = [novo.type, novo.manufacturer, novo.model].map((s) => s.trim()).filter(Boolean).join(" ") || novo.type.trim();
@@ -116,7 +156,8 @@ const ConferenciaEstacaoPage = () => {
       } as Omit<Asset, "id">);
       const check = await recordCheck(id, { result: "FOUND", stationId: station.id, registerMovement: true, note: "Cadastrado na conferência" });
       if (!check.ok) { toast.error(check.error || "Patrimônio criado, mas a conferência não foi salva. Busque o código para tentar novamente."); closeAdd(); return; }
-      toast.success(`${novo.assetCode.trim()} cadastrado e vinculado`);
+      await uploadPhotos(check.checkId);
+      toast.success(`${novo.assetCode.trim()} cadastrado e vinculado · ${photos.length} foto(s)`);
       closeAdd();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao cadastrar patrimônio");
@@ -132,25 +173,28 @@ const ConferenciaEstacaoPage = () => {
     : [];
   const exactMatch = addQuery ? allAssets.find((a) => a.assetCode.trim().toLowerCase() === addQuery) : undefined;
 
-  const openAdd = () => { setAddQ(""); setAddMode("lookup"); setNovo(emptyNovo); setAddOpen(true); };
+  const openAdd = () => { setAddQ(""); setAddMode("lookup"); setNovo(emptyNovo); setPhotos([]); setAddOpen(true); };
   const goCreate = () => { setNovo({ ...emptyNovo, assetCode: addQ.trim() }); setAddMode("create"); };
-  const closeAdd = () => { setAddOpen(false); setAddMode("lookup"); setAddQ(""); setNovo(emptyNovo); };
+  const closeAdd = () => { setAddOpen(false); setAddMode("lookup"); setAddQ(""); setNovo(emptyNovo); setPhotos([]); };
 
   // Trazer um patrimônio de outro local (ou sem local) para esta estação, registrando a movimentação.
   const bring = async (asset: Asset) => {
+    if (photos.length === 0) { toast.error("Tire ao menos uma foto do item com a etiqueta do patrimônio."); return; }
     setTrazerBusy(asset.id);
     try {
       const cur = getStationForAsset(asset.id);
       const check = await recordCheck(asset.id, { result: "FOUND", stationId: station.id, registerMovement: true,
         note: cur ? `Local errado: transferido de ${cur.code} para ${station.code} na conferência` : "Incluído nesta estação na conferência" });
       if (!check.ok) { toast.error(check.error || "Falha ao salvar transferência e conferência"); return; }
-      toast.success(cur ? `${asset.assetCode} trazido de ${cur.code}` : `${asset.assetCode} vinculado`);
+      await uploadPhotos(check.checkId);
+      toast.success(`${cur ? `${asset.assetCode} trazido de ${cur.code}` : `${asset.assetCode} vinculado`} · ${photos.length} foto(s)`);
       closeAdd();
     } finally { setTrazerBusy(null); }
   };
 
   // Apenas registrar que foi encontrado aqui mas pertence a outro local (sem mover).
   const noteElsewhere = async (asset: Asset) => {
+    if (photos.length === 0) { toast.error("Tire ao menos uma foto comprovando a divergência."); return; }
     setTrazerBusy(asset.id);
     try {
       const cur = getStationForAsset(asset.id);
@@ -158,7 +202,11 @@ const ConferenciaEstacaoPage = () => {
         result: "DIVERGENCE", divergenceType: "WRONG_LOCATION", stationId: station.id,
         note: cur ? `Encontrado em ${station.code}, cadastrado em ${cur.code}` : `Encontrado em ${station.code}, sem local no cadastro`,
       });
-      if (res.ok) toast.success(`Divergência registrada para ${asset.assetCode}`);
+      if (res.ok) {
+        await uploadPhotos(res.checkId);
+        toast.success(`Divergência registrada para ${asset.assetCode} · ${photos.length} foto(s)`);
+        closeAdd();
+      }
       else toast.error(res.error || "Falha ao registrar");
     } finally { setTrazerBusy(null); }
   };
@@ -174,8 +222,33 @@ const ConferenciaEstacaoPage = () => {
     } finally { setFinalizing(false); }
   };
 
+  const photoSection = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">Fotos (prova)</Label>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={triggerCamera}>
+          <Camera className="h-4 w-4" />Tirar foto
+        </Button>
+      </div>
+      {photos.length === 0 ? (
+        <p className="text-[11px] font-medium text-brass">Foto obrigatória: fotografe o item e a etiqueta do patrimônio.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {photos.map((f, i) => (
+            <div key={i} className="relative h-16 w-16 overflow-hidden rounded-md border border-border">
+              <img src={URL.createObjectURL(f)} alt={`foto ${i + 1}`} className="h-full w-full object-cover" />
+              <button type="button" onClick={() => removePhoto(i)} aria-label="Remover foto"
+                className="absolute right-0 top-0 rounded-bl bg-black/60 p-0.5 text-white"><Trash2 className="h-3 w-3" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-paper pb-20">
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onPickPhoto} />
       <header className="sticky top-0 z-10 bg-primary px-3 py-3 text-white">
         <div className="flex items-center gap-2">
           <button onClick={() => navigate("/conferencia")} className="rounded-md p-1.5 text-white/80 hover:bg-white/10"><ArrowLeft className="h-5 w-5" /></button>
@@ -215,11 +288,11 @@ const ConferenciaEstacaoPage = () => {
               </div>
             </div>
             <div className="mt-2.5 grid grid-cols-3 gap-2">
-              <button disabled={busyId === a.id} onClick={() => mark(a, "FOUND")}
+              <button disabled={busyId === a.id} onClick={() => openFound(a)}
                 className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${a.lastCheckResult === "FOUND" ? "border-success bg-success/10 text-success" : "border-border text-ink active:bg-paper-2"}`}>
                 <Check className="h-3.5 w-3.5" />Encontrado
               </button>
-              <button disabled={busyId === a.id} onClick={() => { setDivAsset(a); setDivType("WRONG_LOCATION"); setDivNote(""); }}
+              <button disabled={busyId === a.id} onClick={() => { setDivAsset(a); setDivType("WRONG_LOCATION"); setDivNote(""); setPhotos([]); }}
                 className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${a.lastCheckResult === "DIVERGENCE" ? "border-brass bg-brass/10 text-brass" : "border-border text-ink active:bg-paper-2"}`}>
                 <AlertTriangle className="h-3.5 w-3.5" />Divergência
               </button>
@@ -259,11 +332,31 @@ const ConferenciaEstacaoPage = () => {
               <Label className="text-xs">Observação</Label>
               <Textarea value={divNote} onChange={(e) => setDivNote(e.target.value)} rows={2} placeholder="Detalhe a divergência (opcional)" />
             </div>
+            {photoSection}
             <p className="text-[11px] text-muted-foreground">A divergência fica registrada sem mover o patrimônio. Para trazer um item que está em outro local para cá, use <strong>Trazer patrimônio</strong>.</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDivAsset(null)}>Cancelar</Button>
-            <Button size="sm" onClick={confirmDivergence} disabled={busyId === divAsset?.id}>Registrar</Button>
+            <Button variant="outline" size="sm" onClick={() => { setDivAsset(null); setPhotos([]); }} disabled={uploading}>Cancelar</Button>
+            <Button size="sm" onClick={confirmDivergence} disabled={busyId === divAsset?.id || uploading || photos.length === 0}>
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Encontrado: confirma com foto do item + etiqueta */}
+      <Dialog open={!!foundAsset} onOpenChange={(o) => !o && closeFound()}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Encontrado · {foundAsset?.assetCode}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-[12px] text-muted-foreground">{foundAsset?.description}</p>
+            {photoSection}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={closeFound} disabled={uploading}>Cancelar</Button>
+            <Button size="sm" onClick={confirmFound} disabled={uploading || photos.length === 0}>
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-4 w-4" />Confirmar encontrado</>}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -292,11 +385,11 @@ const ConferenciaEstacaoPage = () => {
                 <div className="mt-1 text-xs text-muted-foreground">{a.lastCheckResult ? `${checkLabel[a.lastCheckResult]} · ${conferenceDate(a.lastCheckAt)} · ${a.lastCheckBy ?? "Usuário não informado"}` : "Ainda não conferido"}</div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">{cur ? `Está em ${cur.code} — será transferido para cá` : "Sem local no cadastro"}</div>
                       <div className="mt-1.5 flex gap-2">
-                        <Button size="sm" className="h-8 flex-1 text-[12px]" disabled={trazerBusy === a.id} onClick={() => bring(a)}>
+                        <Button size="sm" className="h-8 flex-1 text-[12px]" disabled={trazerBusy === a.id || photos.length === 0} onClick={() => bring(a)}>
                           {cur ? "Trazer para esta estação" : "Vincular aqui"}
                         </Button>
                         {cur && (
-                          <Button size="sm" variant="outline" className="h-8 text-[12px]" disabled={trazerBusy === a.id} onClick={() => noteElsewhere(a)}>
+                          <Button size="sm" variant="outline" className="h-8 text-[12px]" disabled={trazerBusy === a.id || photos.length === 0} onClick={() => noteElsewhere(a)}>
                             Só divergência
                           </Button>
                         )}
@@ -305,6 +398,7 @@ const ConferenciaEstacaoPage = () => {
                   );
                 })}
               </div>
+              {addQuery && (trazerResults.length > 0 || !exactMatch) && photoSection}
               {addQuery && !exactMatch && (
                 <button onClick={goCreate}
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-brass/40 py-2.5 text-[13px] font-medium text-brass-ink active:bg-brass/[0.05]">
@@ -333,10 +427,11 @@ const ConferenciaEstacaoPage = () => {
                   </div>
                 </div>
                 <div className="space-y-1.5"><Label className="text-xs">Observação</Label><Textarea value={novo.notes} onChange={(e) => setNovo((f) => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+                {photoSection}
               </div>
               <DialogFooter>
                 <Button variant="outline" size="sm" onClick={() => setAddMode("lookup")}>Voltar</Button>
-                <Button size="sm" onClick={createNovo} disabled={savingNovo}>{savingNovo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar e vincular"}</Button>
+                <Button size="sm" onClick={createNovo} disabled={savingNovo || uploading || photos.length === 0}>{savingNovo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cadastrar e vincular"}</Button>
               </DialogFooter>
             </>
           )}

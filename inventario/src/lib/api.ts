@@ -20,6 +20,8 @@ async function parseResponse<T>(response: Response): Promise<T> {
       const payload = await response.json();
       if (payload?.message) {
         message = payload.message;
+      } else if (payload?.detail) {
+        message = payload.detail;
       } else if (payload?.error) {
         message = payload.error;
       }
@@ -33,7 +35,13 @@ async function parseResponse<T>(response: Response): Promise<T> {
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  // Alguns endpoints (ex.: finalizar conferência) retornam 200 com corpo vazio.
+  // Chamar response.json() num corpo vazio lança "Unexpected end of JSON input".
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
@@ -86,6 +94,21 @@ export async function apiPostForm<T>(path: string, body: FormData): Promise<T> {
 
 export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
+}
+
+// Busca um arquivo protegido (com header de autenticação) e devolve um blob.
+// Útil para exibir imagens/documentos que exigem auth em <img>/nova aba.
+export async function apiGetBlob(path: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const auth = getStoredAuth();
+  if (auth?.token) {
+    headers.Authorization = auth.token;
+  }
+  const response = await fetch(`${API_BASE}${path}`, { method: "GET", headers });
+  if (!response.ok) {
+    throw new ApiError(`Erro HTTP ${response.status}`, response.status);
+  }
+  return response.blob();
 }
 
 function buildHeaders(): HeadersInit {

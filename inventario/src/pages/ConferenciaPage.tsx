@@ -1,11 +1,12 @@
 import { conferenceDate } from "@/components/ConferenceHistory";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ChevronRight, CheckCircle2, LogOut } from "lucide-react";
+import { Search, ChevronRight, CheckCircle2, LogOut, Warehouse } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useInventoryStore } from "@/features/inventory-map/store/useInventoryStore";
 import { useAuthStore } from "@/features/auth/store/useAuthStore";
 import type { Asset, Station } from "@/features/inventory-map/types/inventoryMap.types";
+import { inventoryApi, type ApiHistoryEvent, type ApiPhysicalCheck } from "@/lib/inventory-api";
 
 type StationStat = { checked: number; total: number; issues: number };
 
@@ -27,11 +28,39 @@ const ConferenciaPage = () => {
   const navigate = useNavigate();
   const spaces = useInventoryStore((s) => s.spaces);
   const stations = useInventoryStore((s) => s.stations);
+  const assets = useInventoryStore((s) => s.assets);
   const getAssetsForStation = useInventoryStore((s) => s.getAssetsForStation);
   const getEmployeeForStation = useInventoryStore((s) => s.getEmployeeForStation);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [q, setQ] = useState("");
+  const [stockChecks, setStockChecks] = useState<ApiPhysicalCheck[]>([]);
+  const [stockFinalizations, setStockFinalizations] = useState<ApiHistoryEvent[]>([]);
+
+  const stockAssets = useMemo(() => assets.filter((asset) =>
+    asset.status !== "DISPOSED" && asset.status !== "VOIDED"
+      && (asset.status === "IN_STOCK" || !asset.stationId)), [assets]);
+  const latestStockFinalization = stockFinalizations[0];
+  const stockChecksInCycle = useMemo(() => {
+    const cutoff = latestStockFinalization?.timestamp ? new Date(latestStockFinalization.timestamp).getTime() : 0;
+    const ids = new Set(stockAssets.map((asset) => asset.id));
+    const latest = new Map<number, ApiPhysicalCheck>();
+    stockChecks.forEach((check) => {
+      if (!ids.has(String(check.assetId)) || new Date(check.checkedAt).getTime() <= cutoff || latest.has(check.assetId)) return;
+      latest.set(check.assetId, check);
+    });
+    return latest;
+  }, [latestStockFinalization?.timestamp, stockAssets, stockChecks]);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([inventoryApi.stockChecks(), inventoryApi.stockFinalizations()]).then(([checks, finalizations]) => {
+      if (!active) return;
+      setStockChecks(checks);
+      setStockFinalizations(finalizations);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const groups = useMemo(() => {
     const spById = new Map(spaces.map((s) => [s.id, s]));
@@ -96,6 +125,21 @@ const ConferenciaPage = () => {
       </div>
 
       <main className="flex-1 space-y-4 p-3">
+        <section className="overflow-hidden rounded-xl border-2 border-brass/40 bg-card">
+          <button onClick={() => navigate("/conferencia/estoque")} className="flex w-full items-center gap-3 px-3 py-3 text-left active:bg-paper-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brass/10 text-brass-ink"><Warehouse className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Local especial</div>
+              <div className="text-sm font-semibold text-primary">ESTOQUE TI</div>
+              <div className="text-[12px] text-muted-foreground">Em estoque e sem vínculo · sem mover para estação</div>
+            </div>
+            <div className="text-right text-[11px] text-muted-foreground">
+              <div>{stockChecksInCycle.size}/{stockAssets.length} conferidos</div>
+              {latestStockFinalization && <div>Finalizado em {conferenceDate(latestStockFinalization.timestamp)}</div>}
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+          </button>
+        </section>
         {groups.map((g) => {
           const visibleStations = g.stations.filter(matchStation);
           if (visibleStations.length === 0) return null;

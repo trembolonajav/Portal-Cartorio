@@ -552,6 +552,9 @@ export const inventoryApi = {
   stationChecks: (stationId: string) => apiGet<ApiPhysicalCheck[]>(`/stations/${stationId}/checks`),
   checkHistory: (assetId: string) => apiGet<ApiPhysicalCheck[]>(`/assets/${assetId}/checks`),
   finalizeConference: (stationId: string) => apiPost<void>(`/stations/${stationId}/finalize-conference`),
+  stockChecks: () => apiGet<ApiPhysicalCheck[]>("/stock/checks"),
+  stockFinalizations: () => apiGet<ApiHistoryEvent[]>("/stock/conference-finalizations"),
+  finalizeStockConference: () => apiPost<void>("/stock/finalize-conference"),
   uploadCheckPhoto: (checkId: number | string, file: File | Blob) => {
     const form = new FormData();
     form.append("file", file);

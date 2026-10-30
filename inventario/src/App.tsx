@@ -21,6 +21,7 @@ import CatalogoPage from "./pages/CatalogoPage";
 import LoginPage from "./pages/LoginPage";
 import ConferenciaPage from "./pages/ConferenciaPage";
 import ConferenciaEstacaoPage from "./pages/ConferenciaEstacaoPage";
+import ConferenciaEstoquePage from "./pages/ConferenciaEstoquePage";
 import NotFound from "./pages/NotFound.tsx";
 import PoliticaPatrimonialPage from "./pages/PoliticaPatrimonialPage";
 
@@ -126,6 +127,7 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/conferencia" element={<ProtectedRoute><ConferenciaPage /></ProtectedRoute>} />
             <Route path="/conferencia/estacao/:stationId" element={<ProtectedRoute><ConferenciaEstacaoPage /></ProtectedRoute>} />
+            <Route path="/conferencia/estoque" element={<ProtectedRoute><ConferenciaEstoquePage /></ProtectedRoute>} />
             <Route path="/" element={<InventoryRoute><InventoryMapPage /></InventoryRoute>} />
             <Route path="/patrimonios" element={<InventoryRoute><PatrimoniosPage /></InventoryRoute>} />
             <Route path="/patrimonios/:id" element={<InventoryRoute><FichaPatrimonioPage /></InventoryRoute>} />

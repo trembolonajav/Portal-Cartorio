@@ -62,6 +62,21 @@ public class PhysicalCheckController {
         physicalCheckService.finalizeStationConference(id, username(authentication));
     }
 
+    @GetMapping("/stock/checks")
+    public List<PhysicalCheckResponse> stockHistory() {
+        return physicalCheckService.stockHistory();
+    }
+
+    @GetMapping("/stock/conference-finalizations")
+    public List<HistoryEventResponse> stockFinalizations() {
+        return physicalCheckService.stockFinalizations();
+    }
+
+    @PostMapping("/stock/finalize-conference")
+    public void finalizeStockConference(Authentication authentication) {
+        physicalCheckService.finalizeStockConference(username(authentication));
+    }
+
     // ----- Fotos (provas) da conferência -----
 
     @PostMapping(value = "/checks/{checkId}/photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -7,5 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ConferenceFinalizationRepository extends JpaRepository<ConferenceFinalization, Long> {
     List<ConferenceFinalization> findByStationIdOrderByCheckedAtDesc(Long stationId);
 
+    List<ConferenceFinalization> findByStationIsNullOrderByCheckedAtDesc();
+
     List<ConferenceFinalization> findAllByOrderByCheckedAtDesc();
 }

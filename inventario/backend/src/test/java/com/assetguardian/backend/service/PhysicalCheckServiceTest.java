@@ -49,6 +49,15 @@ class PhysicalCheckServiceTest {
         assertNotNull(records.getValue().getCheckedAt());
     }
 
+    @Test void stockFinalizationHasNoStationAndKeepsAuditAuthor() {
+        service.finalizeStockConference("maria");
+        var record = ArgumentCaptor.forClass(ConferenceFinalization.class);
+        verify(finalizations).save(record.capture());
+        assertNull(record.getValue().getStation());
+        assertEquals("maria", record.getValue().getCheckedBy());
+        assertNotNull(record.getValue().getCheckedAt());
+    }
+
     @Test void failedTransferDoesNotRecordASuccessfulCheck() {
         Asset asset = new Asset(); asset.setId(1L);
         Station from = new Station(); from.setId(2L);

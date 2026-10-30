@@ -108,6 +108,14 @@ public class PhysicalCheckService {
         finalizationRepository.save(finalization);
     }
 
+    public void finalizeStockConference(String username) {
+        ConferenceFinalization finalization = new ConferenceFinalization();
+        finalization.setStation(null);
+        finalization.setCheckedBy(username);
+        finalization.setCheckedAt(LocalDateTime.now());
+        finalizationRepository.save(finalization);
+    }
+
     @Transactional(readOnly = true)
     public List<PhysicalCheckResponse> history(Long assetId) {
         return toResponses(physicalCheckRepository.findByAssetIdOrderByCheckedAtDesc(assetId));
@@ -116,6 +124,11 @@ public class PhysicalCheckService {
     @Transactional(readOnly = true)
     public List<PhysicalCheckResponse> stationHistory(Long stationId) {
         return toResponses(physicalCheckRepository.findByStationIdOrExpectedStationIdOrderByCheckedAtDesc(stationId, stationId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<PhysicalCheckResponse> stockHistory() {
+        return toResponses(physicalCheckRepository.findByStationIsNullOrderByCheckedAtDesc());
     }
 
     /** Painel de auditoria: busca conferências com filtros opcionais. */
@@ -140,6 +153,13 @@ public class PhysicalCheckService {
     public List<HistoryEventResponse> finalizations(Long stationId) {
         return finalizationRepository.findByStationIdOrderByCheckedAtDesc(stationId).stream()
             .map(f -> new HistoryEventResponse("CONFERENCE_FINALIZED", "Estação finalizada por " + f.getCheckedBy(), f.getCheckedAt()))
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistoryEventResponse> stockFinalizations() {
+        return finalizationRepository.findByStationIsNullOrderByCheckedAtDesc().stream()
+            .map(f -> new HistoryEventResponse("STOCK_CONFERENCE_FINALIZED", "Estoque TI finalizado por " + f.getCheckedBy(), f.getCheckedAt()))
             .toList();
     }
 

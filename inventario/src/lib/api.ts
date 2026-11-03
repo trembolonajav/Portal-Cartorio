@@ -16,8 +16,13 @@ async function parseResponse<T>(response: Response): Promise<T> {
     if (response.status === 403) {
       message = "Sem permissao para executar esta acao. Entre novamente com um usuario administrador ou operador.";
     }
+    const body = await response.text().catch(() => "");
+    if (response.status === 403 && /invalid cors request/i.test(body)) {
+      // Rejeicao de origem pelo Spring: nao tem relacao com o cargo do usuario.
+      message = "O servidor recusou o endereco desta pagina (CORS). Isto e configuracao do servidor, nao falta de permissao do usuario.";
+    }
     try {
-      const payload = await response.json();
+      const payload = JSON.parse(body);
       if (payload?.message) {
         message = payload.message;
       } else if (payload?.detail) {

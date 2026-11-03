@@ -1,5 +1,6 @@
 package com.assetguardian.backend.service;
 
+import com.assetguardian.backend.config.BusinessTime;
 import com.assetguardian.backend.api.dto.ResponsibilityTermCreateRequest;
 import com.assetguardian.backend.api.dto.ResponsibilityTermDocumentResponse;
 import com.assetguardian.backend.api.dto.ResponsibilityTermItemResponse;
@@ -29,8 +30,6 @@ import java.nio.file.Path;
 import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.time.Year;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
@@ -46,7 +45,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Transactional
 public class ResponsibilityTermService {
-    private static final ZoneId BUSINESS_ZONE = ZoneId.of("America/Sao_Paulo");
 
     private final ResponsibilityTermRepository termRepository;
     private final ResponsibilityTermItemRepository itemRepository;
@@ -272,8 +270,8 @@ public class ResponsibilityTermService {
         // Termo nao ativado: documento e entrega saem com a data de hoje (dia da impressao/assinatura).
         // Ativado: usa a data real da ativacao.
         LocalDateTime documentDate = term.getActiveSince() != null
-            ? term.getActiveSince().atZone(ZoneOffset.UTC).withZoneSameInstant(BUSINESS_ZONE).toLocalDateTime()
-            : LocalDateTime.now(BUSINESS_ZONE);
+            ? BusinessTime.toBusiness(term.getActiveSince())
+            : BusinessTime.now();
         StringBuilder html = new StringBuilder();
         html.append(documentStart("Termo de Responsabilidade"));
         html.append("<div class=\"page\">");

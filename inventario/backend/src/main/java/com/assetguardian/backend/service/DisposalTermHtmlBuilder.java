@@ -1,5 +1,6 @@
 package com.assetguardian.backend.service;
 
+import com.assetguardian.backend.config.BusinessTime;
 import com.assetguardian.backend.domain.AssetDisposal;
 import com.assetguardian.backend.domain.AssetDisposalItem;
 import com.assetguardian.backend.domain.AssetDisposalMaterial;
@@ -148,7 +149,7 @@ public class DisposalTermHtmlBuilder {
         html.append("<table class=\"head\">");
         row(html, "Identifica\u00e7\u00e3o", esc(number));
         row(html, "Data da baixa", disposal.getFinalizedAt() != null
-            ? esc(disposal.getFinalizedAt().toLocalDate().format(DATE))
+            ? esc(BusinessTime.toBusiness(disposal.getFinalizedAt()).toLocalDate().format(DATE))
             : "______ / ______ / __________");
         row(html, "Respons\u00e1vel", esc(department));
         row(html, "Quantidade", unitTotal + " (" + spellOut(unitTotal) + ") "

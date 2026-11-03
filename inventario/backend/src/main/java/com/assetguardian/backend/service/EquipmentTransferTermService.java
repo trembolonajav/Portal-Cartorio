@@ -1,5 +1,6 @@
 package com.assetguardian.backend.service;
 
+import com.assetguardian.backend.config.BusinessTime;
 import com.assetguardian.backend.api.dto.EquipmentTransferTermCreateRequest;
 import com.assetguardian.backend.api.dto.EquipmentTransferTermResponse;
 import com.assetguardian.backend.domain.Asset;
@@ -190,9 +191,9 @@ public class EquipmentTransferTermService {
     // ============================ PDF ============================
 
     private String termHtml(EquipmentTransferTerm t) {
-        LocalDateTime when = t.getCompletedAt() != null ? t.getCompletedAt()
+        LocalDateTime when = BusinessTime.toBusiness(t.getCompletedAt() != null ? t.getCompletedAt()
             : (t.getActiveSince() != null ? t.getActiveSince()
-            : (t.getTermGeneratedAt() != null ? t.getTermGeneratedAt() : LocalDateTime.now()));
+            : (t.getTermGeneratedAt() != null ? t.getTermGeneratedAt() : LocalDateTime.now())));
         StringBuilder html = new StringBuilder();
         html.append(documentStart("Termo de Transferencia de Equipamento"));
         html.append("<div class=\"page\">");

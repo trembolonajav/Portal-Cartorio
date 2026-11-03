@@ -117,7 +117,7 @@ const emptyForm = {
   notes: '',
   authorizedByName: SIGNATORIES[0],
   destinationText: '',
-  authorizationDate: new Date().toISOString().slice(0, 10),
+  authorizationDate: new Date().toLocaleDateString('en-CA'),
 };
 
 const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString('pt-BR') : '-');

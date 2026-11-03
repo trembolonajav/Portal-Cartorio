@@ -1,5 +1,6 @@
 package com.assetguardian.backend.service;
 
+import com.assetguardian.backend.config.BusinessTime;
 import com.assetguardian.backend.api.dto.AssetDisposalCancelRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalCreateRequest;
 import com.assetguardian.backend.api.dto.AssetDisposalDocumentResponse;
@@ -125,7 +126,7 @@ public class AssetDisposalService {
         disposal.setNotes(blankToNull(request.notes()));
         disposal.setRequestedBy(blankToNull(actor));
         disposal.setAuthorizedByName(request.authorizedByName().trim());
-        disposal.setAuthorizationDate(request.authorizationDate() == null ? LocalDate.now() : request.authorizationDate());
+        disposal.setAuthorizationDate(request.authorizationDate() == null ? BusinessTime.today() : request.authorizationDate());
         AssetDisposal saved = disposalRepository.save(disposal);
 
         Map<Long, AssetDisposalItemAssessmentRequest> assessments = request.itemAssessments().stream()
@@ -309,7 +310,7 @@ public class AssetDisposalService {
                     affectedTermIds.add(term.getId());
                     term.setNotes(appendLine(term.getNotes(),
                         "Item " + asset.getAssetCode() + " removido por baixa patrimonial "
-                            + disposal.getNumber() + " em " + formatDate(now.toLocalDate()) + "."));
+                            + disposal.getNumber() + " em " + formatDate(BusinessTime.toBusiness(now).toLocalDate()) + "."));
                 }
                 responsibilityTermItemRepository.delete(termItem);
             }
@@ -799,7 +800,7 @@ public class AssetDisposalService {
         html.append("<p class=\"note\">").append(html(foot.toString())).append("</p>");
 
         // Assinaturas
-        html.append("<p class=\"place\">Goiania, ").append(html(formatLongDate(LocalDate.now()))).append(".</p>");
+        html.append("<p class=\"place\">Goiania, ").append(html(formatLongDate(BusinessTime.today()))).append(".</p>");
         html.append("<table class=\"sig-tbl\"><tr>")
             .append("<td><div class=\"sig-name\">Departamento de Tecnologia da Informacao</div>")
             .append("<div class=\"sig-role\">Conferencia e abertura da baixa</div>")
@@ -1444,7 +1445,7 @@ public class AssetDisposalService {
     }
 
     private String formatDate(LocalDate value) {
-        return DateTimeFormatter.ofPattern("dd/MM/yyyy").format(value == null ? LocalDate.now() : value);
+        return DateTimeFormatter.ofPattern("dd/MM/yyyy").format(value == null ? BusinessTime.today() : value);
     }
 
     private static final String[] MESES_PT = {
@@ -1454,12 +1455,12 @@ public class AssetDisposalService {
 
     /** Data por extenso em portugues (ASCII), ex.: "09 de outubro de 2026". */
     private String formatLongDate(LocalDate value) {
-        LocalDate d = (value == null ? LocalDate.now() : value);
+        LocalDate d = (value == null ? BusinessTime.today() : value);
         return String.format("%02d de %s de %d", d.getDayOfMonth(), MESES_PT[d.getMonthValue() - 1], d.getYear());
     }
 
     private String formatDateTime(LocalDateTime value) {
-        return value == null ? "-" : DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(value);
+        return value == null ? "-" : DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(BusinessTime.toBusiness(value));
     }
 
     private String safe(String value) {

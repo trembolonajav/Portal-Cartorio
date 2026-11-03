@@ -1,12 +1,12 @@
 package com.assetguardian.backend.api;
 
+import com.assetguardian.backend.config.BusinessTime;
 import com.assetguardian.backend.api.dto.ConferenceFinalizationResponse;
 import com.assetguardian.backend.api.dto.PhysicalCheckResponse;
 import com.assetguardian.backend.domain.CheckResult;
 import com.assetguardian.backend.service.PhysicalCheckService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,8 +33,8 @@ public class ConferenceController {
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
-        LocalDateTime fromDt = from == null ? null : from.atStartOfDay();
-        LocalDateTime toDt = to == null ? null : to.atTime(LocalTime.MAX);
+        LocalDateTime fromDt = from == null ? null : BusinessTime.startOfDayUtc(from);
+        LocalDateTime toDt = to == null ? null : BusinessTime.endOfDayUtc(to);
         return physicalCheckService.search(stationId, result, checkedBy, fromDt, toDt);
     }
 

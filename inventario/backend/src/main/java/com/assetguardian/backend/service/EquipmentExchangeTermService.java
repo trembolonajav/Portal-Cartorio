@@ -1,5 +1,6 @@
 package com.assetguardian.backend.service;
 
+import com.assetguardian.backend.config.BusinessTime;
 import com.assetguardian.backend.api.dto.EquipmentExchangeTermCreateRequest;
 import com.assetguardian.backend.api.dto.EquipmentExchangeTermDocumentResponse;
 import com.assetguardian.backend.api.dto.EquipmentExchangeTermResponse;
@@ -274,9 +275,9 @@ public class EquipmentExchangeTermService {
     // ============================ PDF ============================
 
     private String termHtml(EquipmentExchangeTerm t) {
-        LocalDateTime when = t.getCompletedAt() != null ? t.getCompletedAt()
+        LocalDateTime when = BusinessTime.toBusiness(t.getCompletedAt() != null ? t.getCompletedAt()
             : (t.getActiveSince() != null ? t.getActiveSince()
-            : (t.getTermGeneratedAt() != null ? t.getTermGeneratedAt() : LocalDateTime.now()));
+            : (t.getTermGeneratedAt() != null ? t.getTermGeneratedAt() : LocalDateTime.now())));
         StringBuilder html = new StringBuilder();
         html.append(documentStart("Termo de Troca de Equipamento"));
         html.append("<div class=\"page\">");

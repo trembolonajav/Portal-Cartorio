@@ -167,6 +167,9 @@ export interface ApiPhysicalCheck {
   result: CheckResult;
   divergenceType: DivergenceType | null;
   note: string | null;
+  conditionGrade: string | null;
+  functionalStatus: string | null;
+  conditionNotes: string | null;
   checkedBy: string;
   checkedAt: string;
   photos: ApiPhysicalCheckPhoto[];
@@ -191,6 +194,9 @@ export interface ApiUnregisteredStockItem {
   model: string | null;
   serialNumber: string | null;
   notes: string | null;
+  conditionGrade: string | null;
+  functionalStatus: string | null;
+  conditionNotes: string | null;
   status: "PENDING" | "REGISTERED";
   registeredAssetId: number | null;
   registeredAssetCode: string | null;
@@ -576,7 +582,7 @@ export const inventoryApi = {
   stationHistory: (id: string) => apiGet<ApiHistoryEvent[]>(`/stations/${id}/history`),
 
   // Conferência física (mobile)
-  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: number | null; registerMovement?: boolean; note?: string }) => apiPost<ApiPhysicalCheck>(`/assets/${assetId}/check`, body),
+  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: number | null; registerMovement?: boolean; note?: string; conditionGrade?: string; functionalStatus?: string; conditionNotes?: string }) => apiPost<ApiPhysicalCheck>(`/assets/${assetId}/check`, body),
   conferenceFinalizations: (stationId: string) => apiGet<ApiHistoryEvent[]>(`/stations/${stationId}/conference-finalizations`),
   stationChecks: (stationId: string) => apiGet<ApiPhysicalCheck[]>(`/stations/${stationId}/checks`),
   checkHistory: (assetId: string) => apiGet<ApiPhysicalCheck[]>(`/assets/${assetId}/checks`),
@@ -585,7 +591,7 @@ export const inventoryApi = {
   stockFinalizations: () => apiGet<ApiHistoryEvent[]>("/stock/conference-finalizations"),
   finalizeStockConference: () => apiPost<void>("/stock/finalize-conference"),
   listUnregisteredStockItems: () => apiGet<ApiUnregisteredStockItem[]>("/stock/unregistered-items"),
-  createUnregisteredStockItem: (body: { type: string; description: string; manufacturer?: string; model?: string; serialNumber?: string; notes?: string }) =>
+  createUnregisteredStockItem: (body: { type: string; description: string; manufacturer?: string; model?: string; serialNumber?: string; notes?: string; conditionGrade: string; functionalStatus: string; conditionNotes: string }) =>
     apiPost<ApiUnregisteredStockItem>("/stock/unregistered-items", body),
   uploadUnregisteredStockItemPhoto: (itemId: number | string, file: File | Blob) => {
     const form = new FormData();

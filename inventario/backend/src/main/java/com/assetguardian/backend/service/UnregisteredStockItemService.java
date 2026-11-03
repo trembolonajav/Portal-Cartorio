@@ -65,6 +65,9 @@ public class UnregisteredStockItemService {
         item.setModel(blankToNull(request.model()));
         item.setSerialNumber(blankToNull(request.serialNumber()));
         item.setNotes(blankToNull(request.notes()));
+        item.setConditionGrade(required(request.conditionGrade()));
+        item.setFunctionalStatus(required(request.functionalStatus()));
+        item.setConditionNotes(required(request.conditionNotes()));
         item.setStatus(UnregisteredStockItemStatus.PENDING);
         item.setFoundBy(blankToNull(username));
         item.setFoundAt(LocalDateTime.now());
@@ -124,6 +127,10 @@ public class UnregisteredStockItemService {
         item.setStatus(UnregisteredStockItemStatus.REGISTERED);
         item.setResolvedBy(blankToNull(username));
         item.setResolvedAt(LocalDateTime.now());
+        asset.setConditionGrade(item.getConditionGrade());
+        asset.setFunctionalStatus(item.getFunctionalStatus());
+        asset.setConditionNotes(item.getConditionNotes());
+        assetRepository.save(asset);
         UnregisteredStockItem saved = itemRepository.save(item);
         List<UnregisteredStockItemPhotoResponse> photos = photoRepository.findByItemIdOrderByUploadedAt(itemId)
             .stream().map(UnregisteredStockItemPhotoResponse::from).toList();

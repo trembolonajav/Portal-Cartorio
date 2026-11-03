@@ -27,7 +27,7 @@ class PhysicalCheckServiceTest {
         when(assets.findById(1L)).thenReturn(Optional.of(asset));
         when(stations.findById(3L)).thenReturn(Optional.of(to));
         when(assignments.findByAssetIdAndStatus(1L, AssignmentStatus.ACTIVE)).thenReturn(Optional.of(assignment));
-        var response = service.recordCheck(1L, new PhysicalCheckRequest(CheckResult.FOUND, null, 3L, true, "Transferido A para B"), "maria");
+        var response = service.recordCheck(1L, new PhysicalCheckRequest(CheckResult.FOUND, null, 3L, true, "Transferido A para B", null, null, null), "maria");
         verify(commands).transferAsset(eq(1L), argThat(r -> r.toStationId().equals(3L) && r.performedBy().equals("maria")));
         assertEquals(2L, response.expectedStationId());
         assertEquals(3L, response.stationId());
@@ -58,6 +58,31 @@ class PhysicalCheckServiceTest {
         assertNotNull(record.getValue().getCheckedAt());
     }
 
+    @Test void stockCheckRequiresAssessmentAndUpdatesCurrentAssetCondition() {
+        Asset asset = new Asset(); asset.setId(1L); asset.setAssetCode("P001");
+        when(assets.findById(1L)).thenReturn(Optional.of(asset));
+        when(assignments.findByAssetIdAndStatus(1L, AssignmentStatus.ACTIVE)).thenReturn(Optional.empty());
+
+        var response = service.recordCheck(1L, new PhysicalCheckRequest(
+            CheckResult.FOUND, null, null, false, "Estoque TI", "FAIR", "WORKING",
+            "Todas as teclas funcionam; teclas A/S/D desgastadas"
+        ), "maria");
+
+        assertEquals("FAIR", response.conditionGrade());
+        assertEquals("WORKING", asset.getFunctionalStatus());
+        assertEquals("Todas as teclas funcionam; teclas A/S/D desgastadas", asset.getConditionNotes());
+        verify(assets).save(asset);
+    }
+
+    @Test void stockCheckRejectsMissingAssessmentJustification() {
+        Asset asset = new Asset(); asset.setId(1L);
+        when(assets.findById(1L)).thenReturn(Optional.of(asset));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.recordCheck(
+            1L, new PhysicalCheckRequest(CheckResult.FOUND, null, null, false, null, "FAIR", "WORKING", ""), "maria"
+        ));
+        verify(checks, never()).save(any());
+    }
+
     @Test void failedTransferDoesNotRecordASuccessfulCheck() {
         Asset asset = new Asset(); asset.setId(1L);
         Station from = new Station(); from.setId(2L);
@@ -67,7 +92,7 @@ class PhysicalCheckServiceTest {
         when(stations.findById(3L)).thenReturn(Optional.of(to));
         when(assignments.findByAssetIdAndStatus(1L, AssignmentStatus.ACTIVE)).thenReturn(Optional.of(assignment));
         doThrow(new IllegalStateException("Falha")).when(commands).transferAsset(eq(1L), any());
-        assertThrows(IllegalStateException.class, () -> service.recordCheck(1L, new PhysicalCheckRequest(CheckResult.FOUND, null, 3L, true, null), "maria"));
+        assertThrows(IllegalStateException.class, () -> service.recordCheck(1L, new PhysicalCheckRequest(CheckResult.FOUND, null, 3L, true, null, null, null, null), "maria"));
         verify(checks, never()).save(any());
     }
 }

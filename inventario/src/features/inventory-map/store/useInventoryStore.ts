@@ -121,7 +121,7 @@ interface InventoryState {
   linkAsset: (assetId: string, stationId: string, reason: string) => Promise<{ ok: boolean; error?: string }>;
   unlinkAsset: (assetId: string, reason: string) => Promise<void>;
   transferAsset: (assetId: string, toStationId: string, reason: string) => Promise<{ ok: boolean; error?: string }>;
-  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: string | null; registerMovement?: boolean; note?: string }) => Promise<{ ok: boolean; error?: string; checkId?: number }>;
+  recordCheck: (assetId: string, body: { result: CheckResult; divergenceType?: DivergenceType | null; stationId?: string | null; registerMovement?: boolean; note?: string; conditionGrade?: string; functionalStatus?: string; conditionNotes?: string }) => Promise<{ ok: boolean; error?: string; checkId?: number }>;
   finalizeConference: (stationId: string) => Promise<void>;
   loadFurniture: (spaceId: string) => Promise<FurnitureItem[]>;
   saveFurniture: (spaceId: string, items: FurnitureItem[]) => Promise<void>;
@@ -591,6 +591,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         stationId: body.stationId ? Number(body.stationId) : null,
         registerMovement: body.registerMovement ?? false,
         note: body.note,
+        conditionGrade: body.conditionGrade,
+        functionalStatus: body.functionalStatus,
+        conditionNotes: body.conditionNotes,
       });
       set(state => ({ assets: state.assets.map(asset => asset.id === assetId ? {
         ...asset, lastCheckAt: saved.checkedAt, lastCheckBy: saved.checkedBy, lastCheckResult: saved.result,

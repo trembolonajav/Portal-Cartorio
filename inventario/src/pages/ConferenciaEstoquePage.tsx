@@ -23,6 +23,19 @@ const DIVERGENCIAS: { value: DivergenceType; label: string }[] = [
   { value: "NEW_UNREGISTERED", label: "Novo / não cadastrado" },
 ];
 
+const CONDITION_LABELS: Record<string, string> = {
+  GOOD: "Bom",
+  FAIR: "Regular",
+  POOR: "Ruim",
+  UNSERVICEABLE: "Inservível",
+};
+
+const FUNCTION_LABELS: Record<string, string> = {
+  WORKING: "Totalmente funcional",
+  PARTIALLY_WORKING: "Parcialmente funcional",
+  NOT_WORKING: "Não funcional",
+};
+
 const resultDot = (result?: CheckResult) =>
   result === "FOUND" ? "#2F7A54" : result === "DIVERGENCE" ? "#A87413" : result === "NOT_FOUND" ? "#B4342B" : "#D8D3CA";
 
@@ -43,6 +56,9 @@ const ConferenciaEstoquePage = () => {
   const [divType, setDivType] = useState<DivergenceType>("WRONG_LOCATION");
   const [divNote, setDivNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [conditionGrade, setConditionGrade] = useState("FAIR");
+  const [functionalStatus, setFunctionalStatus] = useState("WORKING");
+  const [conditionNotes, setConditionNotes] = useState("");
   const [uploading, setUploading] = useState(false);
   const [newItemOpen, setNewItemOpen] = useState(false);
   const [newItemType, setNewItemType] = useState("Teclado");
@@ -124,12 +140,18 @@ const ConferenciaEstoquePage = () => {
     event.target.value = "";
   };
   const removePhoto = (index: number) => setPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  const resetAssessment = () => {
+    setConditionGrade("FAIR");
+    setFunctionalStatus("WORKING");
+    setConditionNotes("");
+  };
   const closeDialogs = () => {
     setFoundAsset(null);
     setDivAsset(null);
     setDivNote("");
     setDivType("WRONG_LOCATION");
     setPhotos([]);
+    resetAssessment();
   };
   const uploadPhotos = async (checkId?: number) => {
     if (!checkId) return;
@@ -145,10 +167,11 @@ const ConferenciaEstoquePage = () => {
     setNewItemSerial("");
     setNewItemNotes("");
     setPhotos([]);
+    resetAssessment();
   };
 
   const createUnregisteredItem = async () => {
-    if (!newItemType.trim() || !newItemDescription.trim() || photos.length === 0) return;
+    if (!newItemType.trim() || !newItemDescription.trim() || !conditionNotes.trim() || photos.length === 0) return;
     setUploading(true);
     try {
       const item = await inventoryApi.createUnregisteredStockItem({
@@ -158,6 +181,9 @@ const ConferenciaEstoquePage = () => {
         model: newItemModel.trim() || undefined,
         serialNumber: newItemSerial.trim() || undefined,
         notes: newItemNotes.trim() || undefined,
+        conditionGrade,
+        functionalStatus,
+        conditionNotes: conditionNotes.trim(),
       });
       for (const photo of photos) await inventoryApi.uploadUnregisteredStockItemPhoto(item.id, photo);
       await reloadHistory();
@@ -205,7 +231,7 @@ const ConferenciaEstoquePage = () => {
   };
 
   const confirmFound = async () => {
-    if (!foundAsset || photos.length === 0) return;
+    if (!foundAsset || photos.length === 0 || !conditionNotes.trim()) return;
     setBusyId(foundAsset.id);
     setUploading(true);
     try {
@@ -215,6 +241,9 @@ const ConferenciaEstoquePage = () => {
         note: foundAsset.status === "IN_STOCK"
           ? "Conferência física do Estoque TI"
           : "Conferência do Estoque TI: patrimônio sem vínculo ativo",
+        conditionGrade,
+        functionalStatus,
+        conditionNotes: conditionNotes.trim(),
       });
       if (!result.ok) throw new Error(result.error || "Falha ao registrar conferência");
       await uploadPhotos(result.checkId);
@@ -230,7 +259,7 @@ const ConferenciaEstoquePage = () => {
   };
 
   const confirmDivergence = async () => {
-    if (!divAsset || photos.length === 0) return;
+    if (!divAsset || photos.length === 0 || !conditionNotes.trim()) return;
     setBusyId(divAsset.id);
     setUploading(true);
     try {
@@ -239,6 +268,9 @@ const ConferenciaEstoquePage = () => {
         divergenceType: divType,
         stationId: null,
         note: divNote.trim() || "Divergência identificada no Estoque TI",
+        conditionGrade,
+        functionalStatus,
+        conditionNotes: conditionNotes.trim(),
       });
       if (!result.ok) throw new Error(result.error || "Falha ao registrar divergência");
       await uploadPhotos(result.checkId);
@@ -307,6 +339,42 @@ const ConferenciaEstoquePage = () => {
     </div>
   );
 
+  const assessmentSection = (
+    <div className="space-y-3 rounded-lg border border-border bg-paper-2 p-2.5">
+      <div className="text-xs font-semibold text-primary">Avaliação do equipamento</div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Funcionamento *</Label>
+          <Select value={functionalStatus} onValueChange={setFunctionalStatus}>
+            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="WORKING">Totalmente funcional</SelectItem>
+              <SelectItem value="PARTIALLY_WORKING">Parcialmente funcional</SelectItem>
+              <SelectItem value="NOT_WORKING">Não funcional</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Estado físico *</Label>
+          <Select value={conditionGrade} onValueChange={setConditionGrade}>
+            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="GOOD">Bom</SelectItem>
+              <SelectItem value="FAIR">Regular</SelectItem>
+              <SelectItem value="POOR">Ruim</SelectItem>
+              <SelectItem value="UNSERVICEABLE">Inservível</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Justificativa do teste *</Label>
+        <Textarea value={conditionNotes} onChange={(event) => setConditionNotes(event.target.value)} rows={3} placeholder="Ex.: todas as teclas funcionam, porém A/S/D estão desgastadas." />
+        {!conditionNotes.trim() && <p className="text-[11px] font-medium text-brass">Descreva o que foi testado e qualquer desgaste ou defeito observado.</p>}
+      </div>
+    </div>
+  );
+
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-paper pb-20">
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onPickPhoto} />
@@ -340,7 +408,7 @@ const ConferenciaEstoquePage = () => {
         <Button
           variant="outline"
           className="h-12 w-full justify-start border-brass/50 bg-brass/[0.07] text-left"
-          onClick={() => { setPhotos([]); setNewItemOpen(true); }}
+          onClick={() => { setPhotos([]); resetAssessment(); setNewItemOpen(true); }}
         >
           <PackagePlus className="mr-2 h-5 w-5 text-brass" />
           <span><strong>Item sem cadastro</strong><span className="block text-[11px] font-normal text-muted-foreground">Fotografar agora e cadastrar o patrimônio depois</span></span>
@@ -354,6 +422,9 @@ const ConferenciaEstoquePage = () => {
                 <div className="num-mono text-[13px] font-semibold text-brass">{item.provisionalCode} · CADASTRO PENDENTE</div>
                 <div className="text-[12px] font-medium text-ink">{item.type} · {item.description}</div>
                 {(item.manufacturer || item.model) && <div className="text-[11px] text-muted-foreground">{[item.manufacturer, item.model].filter(Boolean).join(" · ")}</div>}
+                {item.functionalStatus && item.conditionGrade ? (
+                  <><div className="mt-1 text-[11px] font-medium text-ink">{FUNCTION_LABELS[item.functionalStatus]} · estado {CONDITION_LABELS[item.conditionGrade]?.toLowerCase()}</div><div className="text-[11px] text-muted-foreground">{item.conditionNotes}</div></>
+                ) : <div className="mt-1 text-[11px] font-medium text-brass">Avaliação técnica ainda não informada</div>}
                 <div className="mt-1 text-[11px] text-muted-foreground">{item.photos.length} foto(s) · encontrado por {item.foundBy || "sistema"} em {conferenceDate(item.foundAt)}</div>
                 {item.photos.length > 0 && (
                   <div className="mt-2 flex gap-1.5 overflow-x-auto">
@@ -412,10 +483,10 @@ const ConferenciaEstoquePage = () => {
                 </div>
               </div>
               <div className="mt-2.5 grid grid-cols-3 gap-2">
-                <button disabled={busyId === asset.id} onClick={() => { setFoundAsset(asset); setPhotos([]); }} className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${check?.result === "FOUND" ? "border-success bg-success/10 text-success" : "border-border text-ink active:bg-paper-2"}`}>
+                <button disabled={busyId === asset.id} onClick={() => { setFoundAsset(asset); setPhotos([]); resetAssessment(); }} className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${check?.result === "FOUND" ? "border-success bg-success/10 text-success" : "border-border text-ink active:bg-paper-2"}`}>
                   <Check className="h-3.5 w-3.5" />Encontrado
                 </button>
-                <button disabled={busyId === asset.id} onClick={() => { setDivAsset(asset); setDivNote(""); setDivType("WRONG_LOCATION"); setPhotos([]); }} className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${check?.result === "DIVERGENCE" ? "border-brass bg-brass/10 text-brass" : "border-border text-ink active:bg-paper-2"}`}>
+                <button disabled={busyId === asset.id} onClick={() => { setDivAsset(asset); setDivNote(""); setDivType("WRONG_LOCATION"); setPhotos([]); resetAssessment(); }} className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${check?.result === "DIVERGENCE" ? "border-brass bg-brass/10 text-brass" : "border-border text-ink active:bg-paper-2"}`}>
                   <AlertTriangle className="h-3.5 w-3.5" />Divergência
                 </button>
                 <button disabled={busyId === asset.id} onClick={() => void markNotFound(asset)} className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-[12px] font-medium ${check?.result === "NOT_FOUND" ? "border-danger bg-danger/10 text-danger" : "border-border text-ink active:bg-paper-2"}`}>
@@ -442,10 +513,11 @@ const ConferenciaEstoquePage = () => {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader><DialogTitle>Encontrado no estoque · {foundAsset?.assetCode}</DialogTitle></DialogHeader>
           <p className="text-[12px] text-muted-foreground">{foundAsset?.description}</p>
+          {assessmentSection}
           {photoSection}
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={closeDialogs} disabled={uploading}>Cancelar</Button>
-            <Button size="sm" onClick={() => void confirmFound()} disabled={uploading || photos.length === 0}>
+            <Button size="sm" onClick={() => void confirmFound()} disabled={uploading || photos.length === 0 || !conditionNotes.trim()}>
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar encontrado"}
             </Button>
           </DialogFooter>
@@ -464,11 +536,12 @@ const ConferenciaEstoquePage = () => {
               </Select>
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Observação</Label><Textarea value={divNote} onChange={(event) => setDivNote(event.target.value)} rows={2} /></div>
+            {assessmentSection}
             {photoSection}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={closeDialogs} disabled={uploading}>Cancelar</Button>
-            <Button size="sm" onClick={() => void confirmDivergence()} disabled={uploading || photos.length === 0}>
+            <Button size="sm" onClick={() => void confirmDivergence()} disabled={uploading || photos.length === 0 || !conditionNotes.trim()}>
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar divergência"}
             </Button>
           </DialogFooter>
@@ -490,11 +563,12 @@ const ConferenciaEstoquePage = () => {
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Número de série</Label><Input value={newItemSerial} onChange={(event) => setNewItemSerial(event.target.value)} /></div>
             <div className="space-y-1.5"><Label className="text-xs">Observações</Label><Textarea value={newItemNotes} onChange={(event) => setNewItemNotes(event.target.value)} rows={2} placeholder="Estado, defeitos, etiqueta apagada..." /></div>
+            {assessmentSection}
             {photoSection}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={resetNewItem} disabled={uploading}>Cancelar</Button>
-            <Button size="sm" onClick={() => void createUnregisteredItem()} disabled={uploading || !newItemType.trim() || !newItemDescription.trim() || photos.length === 0}>
+            <Button size="sm" onClick={() => void createUnregisteredItem()} disabled={uploading || !newItemType.trim() || !newItemDescription.trim() || !conditionNotes.trim() || photos.length === 0}>
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="mr-1 h-4 w-4" />Salvar pendente</>}
             </Button>
           </DialogFooter>

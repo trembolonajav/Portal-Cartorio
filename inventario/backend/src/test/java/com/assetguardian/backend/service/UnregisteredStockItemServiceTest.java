@@ -31,13 +31,15 @@ class UnregisteredStockItemServiceTest {
         when(items.save(any(UnregisteredStockItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = service.create(
-            new UnregisteredStockItemRequest("Teclado", "Teclado USB preto", "Dell", "KB216", null, "Etiqueta ausente"),
+            new UnregisteredStockItemRequest("Teclado", "Teclado USB preto", "Dell", "KB216", null, "Etiqueta ausente", "FAIR", "WORKING", "Todas as teclas funcionam; teclas A/S/D desgastadas"),
             "gabriel"
         );
 
         assertEquals("PEND-00007", response.provisionalCode());
         assertEquals("PENDING", response.status());
         assertEquals("gabriel", response.foundBy());
+        assertEquals("FAIR", response.conditionGrade());
+        assertEquals("WORKING", response.functionalStatus());
         assertNull(response.registeredAssetId());
         verify(items).save(any(UnregisteredStockItem.class));
     }
@@ -49,6 +51,9 @@ class UnregisteredStockItemServiceTest {
         item.setType("Teclado");
         item.setDescription("Teclado USB preto");
         item.setStatus(UnregisteredStockItemStatus.PENDING);
+        item.setConditionGrade("FAIR");
+        item.setFunctionalStatus("WORKING");
+        item.setConditionNotes("Todas as teclas funcionam; letras desgastadas");
         Asset asset = new Asset();
         asset.setAssetCode("2041");
 
@@ -62,5 +67,9 @@ class UnregisteredStockItemServiceTest {
         assertEquals("REGISTERED", response.status());
         assertEquals("2041", response.registeredAssetCode());
         assertEquals("gabriel", response.resolvedBy());
+        assertEquals("FAIR", asset.getConditionGrade());
+        assertEquals("WORKING", asset.getFunctionalStatus());
+        assertEquals("Todas as teclas funcionam; letras desgastadas", asset.getConditionNotes());
+        verify(assets).save(asset);
     }
 }

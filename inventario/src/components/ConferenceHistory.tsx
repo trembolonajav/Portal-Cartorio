@@ -7,6 +7,8 @@ const divergenceLabel: Record<string, string> = {
   WRONG_LOCATION: 'Local errado', WRONG_OWNER: 'Responsável diferente', WRONG_DESCRIPTION: 'Descrição incorreta',
   NO_TAG: 'Sem etiqueta', DAMAGED: 'Danificado', DISPOSED_FOUND: 'Baixado mas encontrado', NEW_UNREGISTERED: 'Novo / não cadastrado',
 };
+const conditionLabel: Record<string, string> = { GOOD: 'Bom', FAIR: 'Regular', POOR: 'Ruim', UNSERVICEABLE: 'Inservível' };
+const functionalLabel: Record<string, string> = { WORKING: 'Totalmente funcional', PARTIALLY_WORKING: 'Parcialmente funcional', NOT_WORKING: 'Não funcional' };
 
 export function ConferenceHistory({ assetId, stationId, revision, movements = false }: {
   assetId?: string; stationId?: string; revision?: unknown; movements?: boolean;
@@ -47,6 +49,8 @@ export function ConferenceHistory({ assetId, stationId, revision, movements = fa
           <p>Local da conferência: {c.stationCode ?? 'Não informado'}</p>
           <p>Local cadastrado antes: {c.expectedStationCode ?? 'Sem estação'}</p>
           {c.divergenceType && <p className="font-medium">{divergenceLabel[c.divergenceType] ?? c.divergenceType}</p>}
+          {c.functionalStatus && c.conditionGrade && <p className="font-medium">{functionalLabel[c.functionalStatus] ?? c.functionalStatus} · estado {conditionLabel[c.conditionGrade]?.toLowerCase() ?? c.conditionGrade}</p>}
+          {c.conditionNotes && <p className="mt-1 whitespace-pre-wrap text-muted-foreground">Avaliação: {c.conditionNotes}</p>}
           {c.note && <p className="mt-1 whitespace-pre-wrap">{c.note}</p>}
         </> : <><p className="font-medium">{event!.description}</p><p className="text-muted-foreground">{conferenceDate(date)}</p></>}
       </div>)}

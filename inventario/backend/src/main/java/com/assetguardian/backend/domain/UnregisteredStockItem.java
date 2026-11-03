@@ -39,6 +39,15 @@ public class UnregisteredStockItem extends BaseEntity {
     @Column(length = 2000)
     private String notes;
 
+    @Column(name = "condition_grade", length = 30)
+    private String conditionGrade;
+
+    @Column(name = "functional_status", length = 30)
+    private String functionalStatus;
+
+    @Column(name = "condition_notes", length = 1000)
+    private String conditionNotes;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UnregisteredStockItemStatus status = UnregisteredStockItemStatus.PENDING;

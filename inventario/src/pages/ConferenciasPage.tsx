@@ -27,6 +27,9 @@ const DIVERGENCE_LABEL: Record<DivergenceType, string> = {
   NEW_UNREGISTERED: "Novo / não cadastrado",
 };
 
+const CONDITION_LABEL: Record<string, string> = { GOOD: "Bom", FAIR: "Regular", POOR: "Ruim", UNSERVICEABLE: "Inservível" };
+const FUNCTION_LABEL: Record<string, string> = { WORKING: "Totalmente funcional", PARTIALLY_WORKING: "Parcialmente funcional", NOT_WORKING: "Não funcional" };
+
 const fmtDateTime = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
@@ -223,6 +226,8 @@ const ConferenciasPage = () => {
                     </div>
                     <div className="text-[12px] text-muted-foreground">
                       {r.note || <span className="italic opacity-60">—</span>}
+                      {r.functionalStatus && r.conditionGrade && <div className="mt-1 font-medium text-ink">{FUNCTION_LABEL[r.functionalStatus]} · {CONDITION_LABEL[r.conditionGrade]}</div>}
+                      {r.conditionNotes && <div className="mt-0.5 whitespace-pre-wrap text-[11px]">{r.conditionNotes}</div>}
                       {r.photos?.length > 0 && (
                         <span className="ml-1 inline-flex items-center gap-0.5 align-middle text-[11px] text-primary"><Camera className="h-3 w-3" />{r.photos.length}</span>
                       )}

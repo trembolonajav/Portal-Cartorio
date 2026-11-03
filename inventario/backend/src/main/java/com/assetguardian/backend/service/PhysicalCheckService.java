@@ -62,6 +62,13 @@ public class PhysicalCheckService {
         if (request.result() == CheckResult.DIVERGENCE && request.divergenceType() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o tipo de divergencia");
         }
+        if (station == null && request.result() != CheckResult.NOT_FOUND
+            && (blankToNull(request.conditionGrade()) == null
+                || blankToNull(request.functionalStatus()) == null
+                || blankToNull(request.conditionNotes()) == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Informe funcionamento, estado fisico e justificativa do teste");
+        }
 
         Station expected = assetAssignmentRepository.findByAssetIdAndStatus(assetId, AssignmentStatus.ACTIVE)
             .map(assignment -> assignment.getStation()).orElse(null);
@@ -83,6 +90,9 @@ public class PhysicalCheckService {
         check.setResult(request.result());
         check.setDivergenceType(request.result() == CheckResult.DIVERGENCE ? request.divergenceType() : null);
         check.setNote(blankToNull(request.note()));
+        check.setConditionGrade(blankToNull(request.conditionGrade()));
+        check.setFunctionalStatus(blankToNull(request.functionalStatus()));
+        check.setConditionNotes(blankToNull(request.conditionNotes()));
         check.setCheckedBy(username);
         check.setCheckedAt(LocalDateTime.now());
         physicalCheckRepository.save(check);
@@ -90,6 +100,11 @@ public class PhysicalCheckService {
         asset.setLastCheckAt(check.getCheckedAt());
         asset.setLastCheckBy(username);
         asset.setLastCheckResult(request.result());
+        if (request.result() != CheckResult.NOT_FOUND && station == null) {
+            asset.setConditionGrade(check.getConditionGrade());
+            asset.setFunctionalStatus(check.getFunctionalStatus());
+            asset.setConditionNotes(check.getConditionNotes());
+        }
         assetRepository.save(asset);
 
         return toResponse(check, List.of());
@@ -207,6 +222,9 @@ public class PhysicalCheckService {
             c.getResult(),
             c.getDivergenceType(),
             c.getNote(),
+            c.getConditionGrade(),
+            c.getFunctionalStatus(),
+            c.getConditionNotes(),
             c.getCheckedBy(),
             c.getCheckedAt(),
             photos

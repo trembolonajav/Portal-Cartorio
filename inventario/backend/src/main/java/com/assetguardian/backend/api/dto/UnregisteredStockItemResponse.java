@@ -13,6 +13,9 @@ public record UnregisteredStockItemResponse(
     String model,
     String serialNumber,
     String notes,
+    String conditionGrade,
+    String functionalStatus,
+    String conditionNotes,
     String status,
     Long registeredAssetId,
     String registeredAssetCode,
@@ -29,6 +32,7 @@ public record UnregisteredStockItemResponse(
         return new UnregisteredStockItemResponse(
             item.getId(), item.getProvisionalCode(), item.getType(), item.getDescription(),
             item.getManufacturer(), item.getModel(), item.getSerialNumber(), item.getNotes(),
+            item.getConditionGrade(), item.getFunctionalStatus(), item.getConditionNotes(),
             item.getStatus().name(),
             item.getRegisteredAsset() == null ? null : item.getRegisteredAsset().getId(),
             item.getRegisteredAsset() == null ? null : item.getRegisteredAsset().getAssetCode(),

@@ -42,6 +42,15 @@ public class PhysicalCheck extends BaseEntity {
     @Column(length = 2000)
     private String note;
 
+    @Column(name = "condition_grade", length = 30)
+    private String conditionGrade;
+
+    @Column(name = "functional_status", length = 30)
+    private String functionalStatus;
+
+    @Column(name = "condition_notes", length = 1000)
+    private String conditionNotes;
+
     @Column(name = "checked_by", nullable = false, length = 160)
     private String checkedBy;
 

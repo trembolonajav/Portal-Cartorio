@@ -17,6 +17,9 @@ public record PhysicalCheckResponse(
     CheckResult result,
     DivergenceType divergenceType,
     String note,
+    String conditionGrade,
+    String functionalStatus,
+    String conditionNotes,
     String checkedBy,
     LocalDateTime checkedAt,
     List<PhysicalCheckPhotoResponse> photos

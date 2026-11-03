@@ -29,7 +29,7 @@ public class PortalUserDetailsService implements UserDetailsService {
                 authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
             } else if ("operador".equals(normalized)) {
                 authorities.add(new SimpleGrantedAuthority("ROLE_OPERATOR"));
-            } else if ("usuario".equals(normalized)) {
+            } else if (Set.of("usuario", "user", "funcionario", "estagiario", "estagiário").contains(normalized)) {
                 // Estagiário: ver inventário + conferência física (mobile); nunca excluir.
                 authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
             }

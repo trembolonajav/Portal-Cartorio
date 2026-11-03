@@ -32,7 +32,8 @@ const SessionActions = ({ dark = true }: { dark?: boolean }) => {
         className={dark ? "text-primary-foreground/70 hover:text-primary-foreground text-xs" : "text-xs"}
         onClick={() => {
           logout();
-          window.location.href = `${window.location.protocol}//${window.location.hostname}:8080`;
+          const production = window.location.port === "9082" || window.location.port === "443" || window.location.port === "";
+          window.location.href = `http://${window.location.hostname}:${production ? 9080 : 8080}`;
         }}
       >
         <LogOut className="h-3.5 w-3.5 mr-1.5" />

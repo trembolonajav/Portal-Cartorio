@@ -35,7 +35,8 @@ type NavKey =
   | "baixas"
   | "arquivo"
   | "importar"
-  | "politica";
+  | "politica"
+  | "conferencia-mobile";
 
 interface NavItem {
   key: NavKey;
@@ -44,6 +45,8 @@ interface NavItem {
   icon: typeof Package;
   count?: number;
   adminOnly?: boolean;
+  userAllowed?: boolean;
+  userOnly?: boolean;
   disabled?: boolean;
 }
 
@@ -56,8 +59,10 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-const chamadosUrl = () =>
-  `${window.location.protocol}//${window.location.hostname}:8080`;
+const chamadosUrl = () => {
+  const production = window.location.port === "9082" || window.location.port === "443" || window.location.port === "";
+  return `http://${window.location.hostname}:${production ? 9080 : 8080}`;
+};
 
 const initialsOf = (name?: string) =>
   (name ?? "?")
@@ -73,6 +78,7 @@ const AppShell = ({ active, actions, search, children }: AppShellProps) => {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN");
+  const isUser = useAuthStore((s) => s.user?.role === "USER");
   const assets = useInventoryStore((s) => s.assets);
   const employeeCount = useInventoryStore((s) => s.employees.length);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -83,7 +89,8 @@ const AppShell = ({ active, actions, search, children }: AppShellProps) => {
   );
 
   const navItems: NavItem[] = [
-    { key: "patrimonios", label: "Patrimônios", to: "/patrimonios", icon: Package, count: assets.length },
+    { key: "conferencia-mobile", label: "Conferência", to: "/conferencia", icon: ClipboardCheck, userOnly: true, userAllowed: true },
+    { key: "patrimonios", label: "Patrimônios", to: "/patrimonios", icon: Package, count: assets.length, userAllowed: true },
     { key: "mapa", label: "Mapa patrimonial", to: "/", icon: MapIcon },
     { key: "espacos", label: "Espaços e estações", to: "/espacos", icon: LayoutGrid },
     { key: "catalogo", label: "Catálogo", to: "/catalogo", icon: Shapes },
@@ -137,6 +144,8 @@ const AppShell = ({ active, actions, search, children }: AppShellProps) => {
       <nav className="flex flex-1 flex-col gap-0.5 px-3.5 py-3">
         {navItems.map((item, idx) => {
           if (item.adminOnly && !isAdmin) return null;
+          if (isUser && !item.userAllowed) return null;
+          if (!isUser && item.userOnly) return null;
           const isActive = active === item.key;
           const showDivider = item.key === "importar";
           return (

@@ -1,7 +1,7 @@
 import { conferenceDate } from "@/components/ConferenceHistory";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ChevronRight, CheckCircle2, LogOut, Warehouse } from "lucide-react";
+import { Search, ChevronRight, CheckCircle2, LogOut, PackagePlus, Warehouse } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useInventoryStore } from "@/features/inventory-map/store/useInventoryStore";
 import { useAuthStore } from "@/features/auth/store/useAuthStore";
@@ -111,6 +111,9 @@ const ConferenciaPage = () => {
           <div className="truncate text-sm font-semibold">Inventário Índio Artiaga</div>
         </div>
         <span className="text-xs text-white/70">{user?.username}</span>
+        <button onClick={() => navigate("/patrimonios")} className="rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white" title="Cadastrar patrimônio">
+          <PackagePlus className="h-4 w-4" />
+        </button>
         <button onClick={logout} className="rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white" title="Sair">
           <LogOut className="h-4 w-4" />
         </button>

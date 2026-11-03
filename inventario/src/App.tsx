@@ -129,8 +129,8 @@ const App = () => (
             <Route path="/conferencia/estacao/:stationId" element={<ProtectedRoute><ConferenciaEstacaoPage /></ProtectedRoute>} />
             <Route path="/conferencia/estoque" element={<ProtectedRoute><ConferenciaEstoquePage /></ProtectedRoute>} />
             <Route path="/" element={<InventoryRoute><InventoryMapPage /></InventoryRoute>} />
-            <Route path="/patrimonios" element={<InventoryRoute><PatrimoniosPage /></InventoryRoute>} />
-            <Route path="/patrimonios/:id" element={<InventoryRoute><FichaPatrimonioPage /></InventoryRoute>} />
+            <Route path="/patrimonios" element={<ProtectedRoute><PatrimoniosPage /></ProtectedRoute>} />
+            <Route path="/patrimonios/:id" element={<ProtectedRoute><FichaPatrimonioPage /></ProtectedRoute>} />
             <Route path="/movimentacoes" element={<InventoryRoute><MovimentacoesPage /></InventoryRoute>} />
             <Route path="/conferencias" element={<InventoryRoute><ConferenciasPage /></InventoryRoute>} />
             <Route path="/baixas-patrimoniais" element={<InventoryRoute><BaixasPatrimoniaisPage /></InventoryRoute>} />

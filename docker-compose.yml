@@ -6,7 +6,7 @@
       POSTGRES_USER: cart_rio
       POSTGRES_PASSWORD: cart_rio
     ports:
-      - "8084:5432"
+      - "${POSTGRES_PORT:-8084}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
@@ -28,7 +28,7 @@
       # para um restart não reinjetar mocks nem recriar contas via syncEmployeeAccounts.
       APP_SEED_DEMO_DATA: "false"
     ports:
-      - "8081:8081"
+      - "${PORTAL_BACKEND_PORT:-8081}:8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +43,7 @@
       context: .
       dockerfile: Dockerfile.frontend
     ports:
-      - "8080:80"
+      - "${PORTAL_FRONTEND_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -60,7 +60,7 @@
       APP_CORS_ALLOWED_ORIGIN_PATTERNS: http://localhost:*,http://127.0.0.1:*,http://192.168.*:*,http://10.*:*,http://172.16.*:*,http://172.17.*:*,http://172.18.*:*,http://172.19.*:*,http://172.20.*:*,http://172.21.*:*,http://172.22.*:*,http://172.23.*:*,http://172.24.*:*,http://172.25.*:*,http://172.26.*:*,http://172.27.*:*,http://172.28.*:*,http://172.29.*:*,http://172.30.*:*,http://172.31.*:*
       JAVA_OPTS: -Xms128m -Xmx512m
     ports:
-      - "8083:8080"
+      - "${INVENTORY_BACKEND_PORT:-8083}:8080"
     volumes:
       - inventory_storage:/app/storage
     depends_on:
@@ -79,7 +79,7 @@
       context: ./inventario
       dockerfile: Dockerfile
     ports:
-      - "8082:80"
+      - "${INVENTORY_FRONTEND_PORT:-8082}:80"
     depends_on:
       inventory-backend:
         condition: service_healthy
@@ -93,7 +93,7 @@
     environment:
       SERVER_HOST: ${SERVER_HOST:-192.168.0.186}
     ports:
-      - "8085:443"
+      - "${CADDY_HTTPS_PORT:-8085}:443"
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

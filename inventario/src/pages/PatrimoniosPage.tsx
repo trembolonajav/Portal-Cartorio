@@ -75,7 +75,9 @@ const buildAssetDescription = (data: Pick<typeof emptyForm, 'type' | 'assetCode'
 
 const PatrimoniosPage = () => {
   const navigate = useNavigate();
-  const isAdmin = useAuthStore(state => state.user?.role === 'ADMIN');
+  const role = useAuthStore(state => state.user?.role);
+  const isAdmin = role === 'ADMIN';
+  const canEdit = role === 'ADMIN' || role === 'OPERATOR';
   const {
     assets,
     stations,
@@ -420,9 +422,11 @@ const PatrimoniosPage = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(asset.id)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                            {canEdit && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(asset.id)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                             {isAdmin && asset.status !== 'DISPOSED' && asset.status !== 'VOIDED' && (
                               <Button variant="ghost" size="sm" title="Anular cadastro" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => { setVoidId(asset.id); setVoidReason(''); }}>
                                 <Ban className="h-3.5 w-3.5" />

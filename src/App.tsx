@@ -91,14 +91,15 @@ function canAdmin(user: AuthUser) {
 
 function sameHostUrl(port: number, path = "") {
   if (typeof window === "undefined") return path || "/";
-  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
+  const productionPorts: Record<number, number> = { 8082: 9082, 8083: 9083 };
+  const resolvedPort = window.location.port === "9080" ? (productionPorts[port] ?? port) : port;
+  return `${window.location.protocol}//${window.location.hostname}:${resolvedPort}${path}`;
 }
 
 function inventoryApiUrl(path: string) {
-  if (typeof window !== "undefined" && window.location.port === "8080") {
-    return `/inventory-api/v1${path}`;
-  }
-  return sameHostUrl(8083, `/api/v1${path}`);
+  // O nginx do Portal encaminha internamente para inventory-backend.
+  // Assim desenvolvimento e produção não dependem de uma porta gravada no bundle.
+  return `/inventory-api/v1${path}`;
 }
 
 export default function App() {

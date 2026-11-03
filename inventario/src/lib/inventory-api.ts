@@ -172,6 +172,35 @@ export interface ApiPhysicalCheck {
   photos: ApiPhysicalCheckPhoto[];
 }
 
+export interface ApiUnregisteredStockItemPhoto {
+  id: number;
+  itemId: number;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface ApiUnregisteredStockItem {
+  id: number;
+  provisionalCode: string;
+  type: string;
+  description: string;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  notes: string | null;
+  status: "PENDING" | "REGISTERED";
+  registeredAssetId: number | null;
+  registeredAssetCode: string | null;
+  foundBy: string | null;
+  foundAt: string;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  photos: ApiUnregisteredStockItemPhoto[];
+}
+
 export interface ApiConferenceFinalization {
   id: number;
   stationId: number | null;
@@ -555,6 +584,17 @@ export const inventoryApi = {
   stockChecks: () => apiGet<ApiPhysicalCheck[]>("/stock/checks"),
   stockFinalizations: () => apiGet<ApiHistoryEvent[]>("/stock/conference-finalizations"),
   finalizeStockConference: () => apiPost<void>("/stock/finalize-conference"),
+  listUnregisteredStockItems: () => apiGet<ApiUnregisteredStockItem[]>("/stock/unregistered-items"),
+  createUnregisteredStockItem: (body: { type: string; description: string; manufacturer?: string; model?: string; serialNumber?: string; notes?: string }) =>
+    apiPost<ApiUnregisteredStockItem>("/stock/unregistered-items", body),
+  uploadUnregisteredStockItemPhoto: (itemId: number | string, file: File | Blob) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiPostForm<ApiUnregisteredStockItemPhoto>(`/stock/unregistered-items/${itemId}/photos`, form);
+  },
+  resolveUnregisteredStockItem: (itemId: number | string, assetCode: string) =>
+    apiPost<ApiUnregisteredStockItem>(`/stock/unregistered-items/${itemId}/resolve`, { assetCode }),
+  unregisteredStockItemPhotoUrl: (id: number | string) => apiUrl(`/unregistered-stock-item-photos/${id}/file`),
   uploadCheckPhoto: (checkId: number | string, file: File | Blob) => {
     const form = new FormData();
     form.append("file", file);

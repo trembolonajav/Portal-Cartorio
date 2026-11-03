@@ -18,9 +18,16 @@ export const getStoredAuth = (): StoredAuthCredentials | null => {
     return null;
   }
 
-  const portalCookieToken = getCookie(PORTAL_AUTH_COOKIE);
-  if (portalCookieToken) {
-    return { username: "portal", token: portalCookieToken };
+  // Uma autenticação feita explicitamente no PWA deve sempre vencer o cookie
+  // compartilhado do Portal. Caso contrário, abrir o Portal com outra conta
+  // pode trocar silenciosamente a identidade usada pela conferência mobile.
+  const sessionRaw = window.sessionStorage.getItem(AUTH_STORAGE_KEY);
+  if (sessionRaw) {
+    try {
+      return JSON.parse(sessionRaw) as StoredAuthCredentials;
+    } catch {
+      window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    }
   }
 
   const portalRaw = window.localStorage.getItem(PORTAL_AUTH_STORAGE_KEY);
@@ -32,17 +39,12 @@ export const getStoredAuth = (): StoredAuthCredentials | null => {
     }
   }
 
-  const raw = window.sessionStorage.getItem(AUTH_STORAGE_KEY);
-  if (!raw) {
-    return null;
+  const portalCookieToken = getCookie(PORTAL_AUTH_COOKIE);
+  if (portalCookieToken) {
+    return { username: "portal", token: portalCookieToken };
   }
 
-  try {
-    return JSON.parse(raw) as StoredAuthCredentials;
-  } catch {
-    window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
-    return null;
-  }
+  return null;
 };
 
 export const setStoredAuth = (value: StoredAuthCredentials, persist = false) => {

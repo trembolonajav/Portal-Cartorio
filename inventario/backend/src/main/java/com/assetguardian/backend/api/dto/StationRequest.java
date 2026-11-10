@@ -3,6 +3,7 @@ package com.assetguardian.backend.api.dto;
 import com.assetguardian.backend.domain.StationStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record StationRequest(
@@ -25,6 +26,8 @@ public record StationRequest(
     String layoutElementRef,
     Integer positionX,
     Integer positionY,
-    Integer positionRotation
+    Integer positionRotation,
+    @Pattern(regexp = "AUTO|LEFT|RIGHT|BOTH|NONE")
+    String partitionSide
 ) {
 }

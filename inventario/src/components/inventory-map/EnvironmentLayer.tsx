@@ -26,7 +26,7 @@ const SRC: Partial<Record<FurnitureKind, string>> = {
 };
 
 const isDoor = (kind: FurnitureKind) => kind === 'door-left' || kind === 'door-right';
-const isStructural = (kind: FurnitureKind) => kind === 'wall' || kind === 'partition' || kind === 'wall-module' || isDoor(kind);
+const isStructural = (kind: FurnitureKind) => kind === 'floor' || kind === 'wall' || kind === 'partition' || kind === 'wall-module' || isDoor(kind);
 const isHorizontalWall = (f: Pick<FurnitureItem, 'width' | 'height'>) => f.width >= f.height;
 
 const DoorView = ({ mirrored }: { mirrored: boolean }) => (
@@ -52,15 +52,66 @@ const DoorView = ({ mirrored }: { mirrored: boolean }) => (
 );
 
 const FurnitureView = ({ f }: { f: FurnitureItem }) => {
+  if (f.kind === 'floor') return (
+    <div
+      aria-label={f.label || 'Piso'}
+      style={{
+        width: '100%', height: '100%', boxSizing: 'border-box',
+        backgroundColor: '#071B31',
+        backgroundImage: f.assetKey ? `url(/pack/ambiente/${f.assetKey})` : undefined,
+        backgroundRepeat: 'repeat', backgroundSize: '384px 256px',
+        border: '1px solid rgba(0,35,75,.22)', borderRadius: 2,
+      }}
+    />
+  );
   if (f.kind === 'wall') return <div style={{ width: '100%', height: '100%', boxSizing: 'border-box', background: '#AEB4B8', border: '1px solid #252B30', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.35)', borderRadius: 1 }} />;
   if (f.kind === 'door-left') return <DoorView mirrored={false} />;
   if (f.kind === 'door-right') return <DoorView mirrored />;
+  if (f.kind === 'partition' && f.assetKey === 'divisoria-vidro-madeira-marrom.png') return (
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <img src={`/pack/ambiente/${f.assetKey}`} alt={f.label || 'Divisória de vidro e madeira'} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 'auto', transform: 'translateY(-42.35%)', display: 'block' }} draggable={false} />
+    </div>
+  );
+  if (f.kind === 'partition' && f.assetKey) return (
+    <img src={`/pack/ambiente/${f.assetKey}`} alt={f.label || 'Divisória'} style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block' }} draggable={false} />
+  );
   if (f.kind === 'partition') return <div style={{ width: '100%', height: '100%', background: '#C2C9D1', opacity: 0.85, border: '1px solid #9AA1AA', borderRadius: 1 }} />;
   if (f.kind === 'label') {
     const fs = Math.max(9, Math.min(f.height * 0.5, 16));
     return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: fs, letterSpacing: '.1em', color: '#5C6675', textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.1 }}>{f.label || 'SALA'}</div>;
   }
   const src = f.assetKey ? `/pack/ambiente/${f.assetKey}` : `/pack/${SRC[f.kind]}`;
+  if (f.assetCrop) {
+    const crop = f.assetCrop;
+    return (
+      <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+        <img
+          src={src}
+          alt={f.label || ''}
+          style={{
+            position: 'absolute',
+            left: `${-(crop.x / crop.width) * 100}%`,
+            top: `${-(crop.y / crop.height) * 100}%`,
+            width: `${(crop.sourceWidth / crop.width) * 100}%`,
+            maxWidth: 'none',
+            height: 'auto',
+            display: 'block',
+          }}
+          draggable={false}
+        />
+      </div>
+    );
+  }
+  if (f.assetKey === 'televisor-parede.png') return (
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <img src={src} alt={f.label || 'Televisor de parede'} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 'auto', transform: 'translateY(-39.6%)', display: 'block' }} draggable={false} />
+    </div>
+  );
+  if (f.assetKey === 'aparador-moderno-amplo.png') return (
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <img src={src} alt={f.label || 'Armário baixo / aparador amplo'} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 'auto', transform: 'translateY(-23.5%)', display: 'block' }} draggable={false} />
+    </div>
+  );
   return <img src={src} alt={f.label || ''} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} draggable={false} />;
 };
 
@@ -144,7 +195,7 @@ const EnvironmentLayer = ({ items, editing, selectedId, onSelect, onChange, canv
           height: Math.max(6, Math.round((d.oh + localDy) / 2) * 2),
         };
       }
-      const free = it.kind === 'partition' || it.kind === 'label' || isDoor(it.kind);
+      const free = it.kind === 'floor' || it.kind === 'partition' || it.kind === 'label' || isDoor(it.kind);
       if (free) {
         return { ...it, width: Math.max(GRID, snap(d.ow + localDx)), height: Math.max(GRID, snap(d.oh + localDy)) };
       }
@@ -193,7 +244,7 @@ const EnvironmentLayer = ({ items, editing, selectedId, onSelect, onChange, canv
         const wallThicknessHandle: CSSProperties = horizontalWall
           ? { ...handle, right: 'auto', bottom: -7, left: '50%', transform: 'translateX(-50%)', width: 14, height: 14, cursor: 'ns-resize' }
           : { ...handle, right: -7, bottom: 'auto', top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, cursor: 'ew-resize' };
-        const baseZ = isDoor(f.kind) ? 4 : f.kind === 'wall' || f.kind === 'partition' || f.kind === 'wall-module' ? 1 : 2;
+        const baseZ = f.kind === 'floor' ? 0 : isDoor(f.kind) ? 4 : f.kind === 'wall' || f.kind === 'partition' || f.kind === 'wall-module' ? 1 : 2;
         return (
           <div key={f.id}>
             <div
@@ -204,7 +255,7 @@ const EnvironmentLayer = ({ items, editing, selectedId, onSelect, onChange, canv
               style={{
                 position: 'absolute', left: f.x, top: f.y, width: f.width, height: f.height,
                 transform: `rotate(${f.rotation}deg)`, transformOrigin: 'center', touchAction: 'none',
-                cursor: editing ? 'move' : 'default', zIndex: sel ? z : baseZ,
+                cursor: editing ? 'move' : 'default', zIndex: f.kind === 'floor' ? 0 : sel ? z : baseZ,
                 outline: sel ? '2px solid #00234B' : editing ? '1px dashed rgba(0,35,75,.32)' : undefined, outlineOffset: 2,
               }}
             >

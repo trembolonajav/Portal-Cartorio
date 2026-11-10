@@ -445,6 +445,10 @@ public class InventoryCommandService {
         station.setPositionX(request.positionX());
         station.setPositionY(request.positionY());
         station.setPositionRotation(request.positionRotation());
+        // Ausente = mantém o valor (telas que não editam a planta); AUTO = volta ao automático.
+        if (request.partitionSide() != null) {
+            station.setPartitionSide("AUTO".equals(request.partitionSide()) ? null : request.partitionSide());
+        }
     }
 
     private void applyAsset(Asset asset, AssetRequest request) {
@@ -660,6 +664,7 @@ public class InventoryCommandService {
             station.getPositionX(),
             station.getPositionY(),
             station.getPositionRotation(),
+            station.getPartitionSide(),
             station.getLastConferenceAt(),
             station.getLastConferenceBy(),
             assetCount

@@ -22,6 +22,8 @@ export interface LayoutElement {
   metadata?: Record<string, unknown>;
 }
 
+export type PartitionSide = 'LEFT' | 'RIGHT' | 'BOTH' | 'NONE';
+
 export interface Station {
   id: string;
   code: string;
@@ -37,12 +39,16 @@ export interface Station {
   positionX?: number;
   positionY?: number;
   positionRotation?: number;
+  /** Lado da divisória na tela; ausente = automático. */
+  partitionSide?: PartitionSide;
   lastConferenceAt?: string;
   lastConferenceBy?: string;
 }
 
-// Mobília do ambiente (camada visual atrás das estações; não é inventário).
+// Mobília do ambiente. Pode ser apenas visual ou representar, de forma independente,
+// um ponto de trabalho (stationId) e/ou um patrimônio de mobiliário (assetId).
 export type FurnitureKind =
+  | 'floor'
   | 'wall'
   | 'partition'
   | 'door-left'
@@ -56,6 +62,15 @@ export type FurnitureKind =
   | 'asset'
   | 'wall-module';
 
+export interface AssetCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+}
+
 export interface FurnitureItem {
   id: string;
   kind: FurnitureKind;
@@ -66,6 +81,12 @@ export interface FurnitureItem {
   rotation: number;
   label?: string;
   assetKey?: string;
+  /** Recorte visual dentro de um PNG compartilhado (coordenadas da imagem original). */
+  assetCrop?: AssetCrop;
+  /** Estação cuja representação no mapa passa a ser este móvel. */
+  stationId?: string;
+  /** Patrimônio físico do próprio móvel, separado dos itens da estação. */
+  assetId?: string;
   /** Parede desenhada por cantos (polilinha, coords absolutas do canvas). Quando presente,
    * a parede é renderizada como polilinha com emendas limpas, não como retângulo. */
   points?: number[][];

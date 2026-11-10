@@ -23,6 +23,7 @@ public record StationResponse(
     Integer positionX,
     Integer positionY,
     Integer positionRotation,
+    String partitionSide,
     LocalDateTime lastConferenceAt,
     String lastConferenceBy,
     long assetCount

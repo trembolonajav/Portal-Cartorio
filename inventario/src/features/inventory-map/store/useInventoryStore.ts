@@ -8,7 +8,7 @@ import type { ApiLayout, ApiLayoutElement } from '@/lib/inventory-api';
 const kindToElementType = (k: FurnitureKind): ApiLayoutElement['elementType'] =>
   k === 'wall' || k === 'wall-module' ? 'WALL' : k === 'partition' ? 'PARTITION' : k === 'label' ? 'LABEL' : 'ROOM_BLOCK';
 const isStructuralFurniture = (k: FurnitureKind) =>
-  k === 'wall' || k === 'wall-module' || k === 'partition' || k === 'door-left' || k === 'door-right';
+  k === 'floor' || k === 'wall' || k === 'wall-module' || k === 'partition' || k === 'door-left' || k === 'door-right';
 const elementTypeToKind = (t: string): FurnitureKind =>
   t === 'WALL' ? 'wall' : t === 'PARTITION' ? 'partition' : t === 'LABEL' ? 'label' : 'cabinet';
 
@@ -217,6 +217,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         positionX: item.positionX ?? undefined,
         positionY: item.positionY ?? undefined,
         positionRotation: item.positionRotation ?? undefined,
+        partitionSide: (item.partitionSide as Station['partitionSide']) || undefined,
         lastConferenceAt: item.lastConferenceAt || undefined,
         lastConferenceBy: item.lastConferenceBy || undefined,
       }));
@@ -626,6 +627,11 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
           x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation || 0,
           label: el.label || undefined,
           assetKey: (el.metadata?.assetKey as string) || undefined,
+          assetCrop: el.metadata?.assetCrop && typeof el.metadata.assetCrop === 'object'
+            ? (el.metadata.assetCrop as FurnitureItem['assetCrop'])
+            : undefined,
+          stationId: el.stationId ? String(el.stationId) : (el.metadata?.stationId ? String(el.metadata.stationId) : undefined),
+          assetId: el.metadata?.assetId ? String(el.metadata.assetId) : undefined,
           points: Array.isArray(el.metadata?.points) ? (el.metadata!.points as number[][]) : undefined,
           thickness: typeof el.metadata?.thickness === 'number' ? (el.metadata!.thickness as number) : undefined,
         }))));
@@ -641,7 +647,15 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       layer: isStructuralFurniture(f.kind) ? 'structural' : f.kind === 'label' ? 'labels' : 'furniture',
       x: Math.round(f.x), y: Math.round(f.y), width: Math.round(f.width), height: Math.round(f.height),
       rotation: Math.round(f.rotation), label: f.label, zIndex: i,
-      metadata: { kind: f.kind, assetKey: f.assetKey, ...(f.points ? { points: f.points, thickness: f.thickness } : {}) },
+      stationId: f.stationId,
+      metadata: {
+        kind: f.kind,
+        assetKey: f.assetKey,
+        assetCrop: f.assetCrop,
+        stationId: f.stationId,
+        assetId: f.assetId,
+        ...(f.points ? { points: f.points, thickness: f.thickness } : {}),
+      },
     })) as ApiLayoutElement[];
     await inventoryApi.saveLayout(spaceId, {
       id: '', name: space?.name || 'Ambiente', code: `ENV-${spaceId}`,

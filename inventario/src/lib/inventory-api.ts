@@ -40,6 +40,7 @@ export interface ApiStation {
   positionX: number | null;
   positionY: number | null;
   positionRotation: number | null;
+  partitionSide?: string | null;
   lastConferenceAt: string | null;
   lastConferenceBy: string | null;
   lastInventoryCheckAt: string | null;
@@ -575,8 +576,8 @@ export const inventoryApi = {
   deleteEmployee: (id: string) => apiDelete(`/employees/${id}`),
 
   listStations: () => apiGet<ApiStation[]>("/stations"),
-  createStation: (body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string; positionX?: number | null; positionY?: number | null; positionRotation?: number | null }) => apiPost<ApiStation>("/stations", body),
-  updateStation: (id: string, body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string; positionX?: number | null; positionY?: number | null; positionRotation?: number | null }) => apiPut<ApiStation>(`/stations/${id}`, body),
+  createStation: (body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string | null; positionX?: number | null; positionY?: number | null; positionRotation?: number | null }) => apiPost<ApiStation>("/stations", body),
+  updateStation: (id: string, body: { code: string; name: string; locationCode?: string; description?: string; status: StationStatus; observation?: string; spaceId?: number | null; layoutElementRef?: string | null; positionX?: number | null; positionY?: number | null; positionRotation?: number | null; partitionSide?: 'AUTO' | 'LEFT' | 'RIGHT' | 'BOTH' | 'NONE' }) => apiPut<ApiStation>(`/stations/${id}`, body),
   deleteStation: (id: string) => apiDelete(`/stations/${id}`),
   changeResponsible: (id: string, body: { employeeId?: string | null; forceMove?: boolean; notes?: string }) => apiPut<ApiStation>(`/stations/${id}/responsible`, body),
   stationHistory: (id: string) => apiGet<ApiHistoryEvent[]>(`/stations/${id}/history`),

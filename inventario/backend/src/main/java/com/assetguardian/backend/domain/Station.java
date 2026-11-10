@@ -53,6 +53,9 @@ public class Station extends BaseEntity {
     @Column(name = "position_rotation")
     private Integer positionRotation;
 
+    @Column(name = "partition_side", length = 10)
+    private String partitionSide;
+
     @Column(name = "last_inventory_check_at")
     private LocalDateTime lastInventoryCheckAt;
 

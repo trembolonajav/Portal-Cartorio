@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Boxes, Search, Plus, Map as MapIcon, Pencil, Check, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Boxes, Search, Plus, Map as MapIcon, Pencil, Check, X, Link2 } from 'lucide-react';
 import StationSheet from '@/components/inventory-map/StationSheet';
 import IllustratedMap from '@/components/inventory-map/IllustratedMap';
 import MapSelector, { isSelectableMap, spaceAncestors } from '@/components/inventory-map/MapSelector';
@@ -13,10 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useInventoryStore } from '@/features/inventory-map/store/useInventoryStore';
 import { inventoryApi } from '@/lib/inventory-api';
-import type { SpaceType, StationStatus, FurnitureItem } from '@/features/inventory-map/types/inventoryMap.types';
+import type { SpaceType, StationStatus, FurnitureItem, PartitionSide } from '@/features/inventory-map/types/inventoryMap.types';
 import {
   BASIC_ENVIRONMENT_ITEMS,
   CUSTOM_FURNITURE_ITEMS,
+  FLOOR_ITEMS,
   WALL_MODULE_ITEMS,
   type EnvironmentPaletteItem,
 } from '@/features/inventory-map/data/environmentAssetLibrary';
@@ -24,18 +25,30 @@ import { toast } from 'sonner';
 
 const SPACE_TYPE_LABELS: Record<SpaceType, string> = { UNIT: 'Unidade', BUILDING: 'Prédio', FLOOR: 'Andar', SECTOR: 'Departamento' };
 const emptyStation = { code: '', name: '', status: 'ACTIVE' as StationStatus };
-const defaultPos = (idx: number) => ({ x: 30 + (idx % 4) * 230, y: 60 + Math.floor(idx / 4) * 210 });
+const defaultPos = (idx: number) => ({ x: 30 + (idx % 4) * 230, y: 60 + Math.floor(idx / 4) * 280 });
 
 const newFurnId = () => `f-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+const LINKABLE_FURNITURE = new Set(['cabinet', 'meeting', 'printer', 'mfp', 'phone', 'asset', 'partition']);
+// Divisória só recebe o próprio patrimônio; não faz sentido usá-la como ponto de trabalho.
+const ASSET_ONLY_FURNITURE = new Set(['partition']);
+const PARTITION_ASSET_HINT = /divis[oó]ria|biombo|painel divis/i;
+const FURNITURE_ASSET_HINT = /m[oó]vel|mobili[aá]rio|arm[aá]rio|mesa|cadeira|gaveteiro|estante|balc[aã]o|arquivo|rack|equipamento de escrit[oó]rio/i;
+const TELEVISION_ASSET_HINT = /televisor|televis[aã]o|smart\s*tv|\btv\b|painel/i;
+const PRINTER_ASSET_HINT = /impressora|printer|t[eé]rmica|recibo|selo|etiqueta/i;
+const BIOMETRIC_ASSET_HINT = /biometr|hamster|fingertech|nitgen|hfdu06/i;
+const AVA6_SCANNER_ASSET_HINT = /scanner.*ava\s*6|ava\s*6.*scanner|\bava6(?:plus)?\b/i;
 
 const InventoryMapPage = () => {
   const spaces = useInventoryStore((s) => s.spaces);
   const stations = useInventoryStore((s) => s.stations);
+  const assets = useInventoryStore((s) => s.assets);
+  const assignments = useInventoryStore((s) => s.assignments);
   const addStation = useInventoryStore((s) => s.addStation);
   const updateStation = useInventoryStore((s) => s.updateStation);
   const refreshAll = useInventoryStore((s) => s.refreshAll);
   const loadFurniture = useInventoryStore((s) => s.loadFurniture);
   const saveFurniture = useInventoryStore((s) => s.saveFurniture);
+  const navigate = useNavigate();
 
   const [searchParams] = useSearchParams();
   const [activeMap, setActiveMap] = useState<string>('all');
@@ -54,6 +67,7 @@ const InventoryMapPage = () => {
   const [editing, setEditing] = useState(false);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [rotations, setRotations] = useState<Record<string, number>>({});
+  const [partitionSides, setPartitionSides] = useState<Record<string, PartitionSide | 'AUTO'>>({});
   const [savingLayout, setSavingLayout] = useState(false);
   const [furniture, setFurniture] = useState<FurnitureItem[]>([]);
   const [selectedFurn, setSelectedFurn] = useState<string | null>(null);
@@ -64,7 +78,14 @@ const InventoryMapPage = () => {
   useEffect(() => {
     if (activeMap === 'all') { setFurniture([]); return; }
     let alive = true;
-    loadFurniture(activeMap).then((items) => { if (alive) setFurniture(items); });
+    loadFurniture(activeMap).then((items) => {
+      if (!alive) return;
+      const currentStations = useInventoryStore.getState().stations;
+      setFurniture(items.map((item) => ({
+        ...item,
+        stationId: item.stationId ?? currentStations.find((station) => station.layoutElementId === item.id)?.id,
+      })));
+    });
     return () => { alive = false; };
   }, [activeMap, loadFurniture]);
 
@@ -94,9 +115,14 @@ const InventoryMapPage = () => {
     setSheetStationId(null);
   };
   const cancelEdit = () => {
-    setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null); setWallDraw(false);
+    setEditing(false); setPositions({}); setRotations({}); setPartitionSides({}); setSelectedFurn(null); setWallDraw(false);
     if (activeMap !== 'all') loadFurniture(activeMap).then(setFurniture);
   };
+  const PARTITION_CYCLE: (PartitionSide | 'AUTO')[] = ['AUTO', 'LEFT', 'RIGHT', 'BOTH', 'NONE'];
+  const cyclePartitionSide = (id: string) => setPartitionSides((current) => {
+    const now = current[id] ?? stations.find((st) => st.id === id)?.partitionSide ?? 'AUTO';
+    return { ...current, [id]: PARTITION_CYCLE[(PARTITION_CYCLE.indexOf(now) + 1) % PARTITION_CYCLE.length] };
+  });
   const rotate = (id: string) => setRotations((r) => ({ ...r, [id]: ((r[id] ?? 0) + 90) % 360 }));
 
   // Mobília
@@ -114,27 +140,68 @@ const InventoryMapPage = () => {
       rotation: 0,
       label: spec.kind === 'label' ? 'SALA' : spec.label,
       assetKey: spec.assetKey,
+      assetCrop: spec.assetCrop,
     }]);
     setSelectedFurn(id);
   };
   const setFurnLabel = (text: string) => setFurniture((f) => f.map((it) => (it.id === selectedFurn ? { ...it, label: text } : it)));
   const selectedFurnItem = furniture.find((it) => it.id === selectedFurn) || null;
+  const selectedFurnitureIsLinkable = !!selectedFurnItem && LINKABLE_FURNITURE.has(selectedFurnItem.kind);
+  const selectedFurnitureAsset = selectedFurnItem?.assetId ? assets.find((asset) => asset.id === selectedFurnItem.assetId) : undefined;
+  const linkedStationIds = new Set(furniture.filter((item) => item.id !== selectedFurn).map((item) => item.stationId).filter(Boolean));
+  const linkedFurnitureAssetIds = new Set(furniture.filter((item) => item.id !== selectedFurn).map((item) => item.assetId).filter(Boolean));
+  const availableStations = visibleStations.filter((station) => !linkedStationIds.has(station.id));
+  const selectedAssetHint = selectedFurnItem?.kind === 'partition'
+    ? PARTITION_ASSET_HINT
+    : selectedFurnItem?.assetKey === 'televisor-parede.png'
+    ? TELEVISION_ASSET_HINT
+    : selectedFurnItem?.assetKey === 'leitor-biometrico-hamster-dx.png'
+      ? BIOMETRIC_ASSET_HINT
+      : selectedFurnItem?.assetKey === 'scanner-ava6plus.png'
+        ? AVA6_SCANNER_ASSET_HINT
+    : selectedFurnItem?.kind === 'printer'
+      ? PRINTER_ASSET_HINT
+      : FURNITURE_ASSET_HINT;
+  const availableFurnitureAssets = assets.filter((asset) => {
+    if (asset.id === selectedFurnItem?.assetId) return true;
+    if (asset.status === 'DISPOSED' || asset.status === 'VOIDED' || linkedFurnitureAssetIds.has(asset.id)) return false;
+    // Mobiliário pode estar vinculado à estação (ex.: divisória do guichê) e ainda ser desenhado como móvel.
+    const isFurnitureAsset = /mobili[aá]rio/i.test(asset.type);
+    if (!isFurnitureAsset && assignments.some((assignment) => assignment.assetId === asset.id && assignment.status === 'ACTIVE')) return false;
+    return selectedAssetHint.test(`${asset.type} ${asset.description}`);
+  }).sort((a, b) => a.assetCode.localeCompare(b.assetCode));
+  const assetStationCode = (assetId: string) => {
+    const assignment = assignments.find((item) => item.assetId === assetId && item.status === 'ACTIVE');
+    const station = assignment ? stations.find((item) => item.id === assignment.stationId) : undefined;
+    return station ? (station.locationCode || station.code) : undefined;
+  };
+  const updateSelectedFurniture = (updates: Partial<FurnitureItem>) => {
+    if (!selectedFurn) return;
+    setFurniture((items) => items.map((item) => item.id === selectedFurn ? { ...item, ...updates } : item));
+  };
 
   const saveLayout = async () => {
     setSavingLayout(true);
     try {
+      // O layout é a fonte primária do vínculo. Salvá-lo primeiro evita que uma
+      // estação aponte para um elemento ainda inexistente se a segunda etapa falhar.
+      if (activeMap !== 'all') await saveFurniture(activeMap, furniture);
       for (const st of visibleStations) {
         const p = positions[st.id];
-        if (p) await inventoryApi.updateStation(st.id, {
+        const linkedFurniture = furniture.find((item) => item.stationId === st.id);
+        if (p || linkedFurniture || st.layoutElementId || partitionSides[st.id]) await inventoryApi.updateStation(st.id, {
           code: st.code, name: st.name, locationCode: st.locationCode, description: st.description,
           status: st.status, observation: st.observation, spaceId: st.spaceId ? Number(st.spaceId) : null,
-          positionX: p.x, positionY: p.y, positionRotation: rotations[st.id] ?? st.positionRotation ?? 0,
+          layoutElementRef: linkedFurniture?.id ?? null,
+          positionX: p?.x ?? st.positionX ?? null,
+          positionY: p?.y ?? st.positionY ?? null,
+          positionRotation: rotations[st.id] ?? st.positionRotation ?? 0,
+          partitionSide: partitionSides[st.id],
         });
       }
-      if (activeMap !== 'all') await saveFurniture(activeMap, furniture);
       await refreshAll();
       toast.success('Planta salva');
-      setEditing(false); setPositions({}); setRotations({}); setSelectedFurn(null); setWallDraw(false);
+      setEditing(false); setPositions({}); setRotations({}); setPartitionSides({}); setSelectedFurn(null); setWallDraw(false);
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao salvar planta'); }
     finally { setSavingLayout(false); }
   };
@@ -207,6 +274,7 @@ const InventoryMapPage = () => {
               <Button size="sm" variant="outline" className="h-8 border-brass/60 px-2 text-[12px] text-brass-ink" onClick={() => setAssetLibraryOpen(true)}>
                 <Boxes className="mr-1.5 h-3.5 w-3.5" />Biblioteca de ambiente
               </Button>
+              <span className="hidden text-[11px] text-muted-foreground xl:inline">Encaixe: itens em 1 quadrado · paredes em ½ quadrado</span>
               {selectedFurnItem?.kind === 'label' && (
                 <Input value={selectedFurnItem.label ?? ''} onChange={(e) => setFurnLabel(e.target.value)} placeholder="Nome da sala" className="h-8 w-36 text-xs" />
               )}
@@ -222,6 +290,42 @@ const InventoryMapPage = () => {
           )}
         </div>
 
+        {editing && selectedFurnitureIsLinkable && selectedFurnItem && (
+          <div className="flex flex-wrap items-end gap-3 border-b border-border bg-paper-2 px-4 py-3 md:px-6">
+            {!ASSET_ONLY_FURNITURE.has(selectedFurnItem.kind) && <div className="min-w-[190px] flex-1 space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <Link2 className="h-3.5 w-3.5" />Usar móvel como ponto de trabalho
+              </Label>
+              <Select value={selectedFurnItem.stationId ?? '_none'} onValueChange={(value) => updateSelectedFurniture({ stationId: value === '_none' ? undefined : value })}>
+                <SelectTrigger className="h-9 bg-card text-sm"><SelectValue placeholder="Sem estação vinculada" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Somente móvel (sem estação)</SelectItem>
+                  {availableStations.map((station) => <SelectItem key={station.id} value={station.id}>{station.code} — {station.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">A estação deixa de aparecer como mesa separada; este móvel passa a abrir seus itens.</p>
+            </div>}
+            <div className="min-w-[240px] flex-[1.4] space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <Link2 className="h-3.5 w-3.5" />Patrimônio do próprio item
+              </Label>
+              <Select value={selectedFurnItem.assetId ?? '_none'} onValueChange={(value) => updateSelectedFurniture({ assetId: value === '_none' ? undefined : value })}>
+                <SelectTrigger className="h-9 bg-card text-sm"><SelectValue placeholder="Sem patrimônio vinculado" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Sem patrimônio do item</SelectItem>
+                  {availableFurnitureAssets.map((asset) => {
+                    const where = assetStationCode(asset.id);
+                    return <SelectItem key={asset.id} value={asset.id}>{asset.assetCode} — {asset.description}{where ? ` · ${where}` : ''}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {selectedFurnitureAsset ? `${selectedFurnitureAsset.assetCode} · ${selectedFurnitureAsset.type}` : availableFurnitureAssets.length ? 'Selecione o cadastro patrimonial correspondente ao item.' : 'Nenhum patrimônio compatível e livre foi encontrado.'}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="min-h-0 flex-1">
           <IllustratedMap
             search={search}
@@ -232,7 +336,10 @@ const InventoryMapPage = () => {
             rotations={rotations}
             onDragEnd={(id, x, y) => setPositions((p) => ({ ...p, [id]: { x, y } }))}
             onRotate={rotate}
+            partitionSideOverrides={partitionSides}
+            onPartitionSide={cyclePartitionSide}
             onStationClick={setSheetStationId}
+            onAssetClick={(assetId) => navigate(`/patrimonios/${assetId}`)}
             furniture={furniture}
             selectedFurnId={selectedFurn}
             onFurnitureChange={setFurniture}
@@ -257,9 +364,9 @@ const InventoryMapPage = () => {
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Móveis</h3>
-                    <p className="text-xs text-muted-foreground">3 novos assets recortados e com fundo transparente</p>
+                    <p className="text-xs text-muted-foreground">Móveis e equipamentos recortados para montar a planta</p>
                   </div>
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">3 itens</span>
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{CUSTOM_FURNITURE_ITEMS.length} itens</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                   {CUSTOM_FURNITURE_ITEMS.map((item) => (
@@ -270,8 +377,61 @@ const InventoryMapPage = () => {
                       className="group rounded-xl border border-border bg-card p-3 text-left transition hover:border-brass hover:bg-brass/5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brass/50"
                     >
                       <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-border bg-paper-2 p-3">
-                        <img src={`/pack/ambiente/${item.assetKey}`} alt={item.label} className="max-h-full max-w-full object-contain transition-transform group-hover:scale-[1.03]" />
+                        {item.assetCrop ? (
+                          <div
+                            className="relative max-h-full w-24 overflow-hidden"
+                            style={{ aspectRatio: `${item.assetCrop.width} / ${item.assetCrop.height}` }}
+                          >
+                            <img
+                              src={`/pack/ambiente/${item.assetKey}`}
+                              alt={item.label}
+                              className="absolute h-auto max-w-none"
+                              style={{
+                                left: `${-(item.assetCrop.x / item.assetCrop.width) * 100}%`,
+                                top: `${-(item.assetCrop.y / item.assetCrop.height) * 100}%`,
+                                width: `${(item.assetCrop.sourceWidth / item.assetCrop.width) * 100}%`,
+                              }}
+                            />
+                          </div>
+                        ) : item.assetKey === 'televisor-parede.png' ? (
+                          <div className="relative h-16 w-full overflow-hidden">
+                            <img src={`/pack/ambiente/${item.assetKey}`} alt={item.label} className="absolute left-0 top-0 w-full transition-transform group-hover:scale-[1.03]" style={{ transform: 'translateY(-39.6%)' }} />
+                          </div>
+                        ) : item.assetKey === 'aparador-moderno-amplo.png' ? (
+                          <div className="relative h-16 w-full overflow-hidden">
+                            <img src={`/pack/ambiente/${item.assetKey}`} alt={item.label} className="absolute left-0 top-0 w-full" style={{ transform: 'translateY(-23.5%)' }} />
+                          </div>
+                        ) : item.assetKey === 'divisoria-vidro-madeira-marrom.png' ? (
+                          <div className="relative h-16 w-full overflow-hidden">
+                            <img src={`/pack/ambiente/${item.assetKey}`} alt={item.label} className="absolute left-0 top-0 w-full" style={{ transform: 'translateY(-42.35%)' }} />
+                          </div>
+                        ) : (
+                          <img src={`/pack/ambiente/${item.assetKey}`} alt={item.label} className="max-h-full max-w-full object-contain transition-transform group-hover:scale-[1.03]" />
+                        )}
                       </div>
+                      <span className="mt-2 block text-xs font-medium text-foreground">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Pisos</h3>
+                    <p className="text-xs text-muted-foreground">Redimensione o piso para cobrir a área de cada sala</p>
+                  </div>
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{FLOOR_ITEMS.length} item</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                  {FLOOR_ITEMS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { addFurniture(item); setAssetLibraryOpen(false); }}
+                      className="group rounded-xl border border-border bg-card p-3 text-left transition hover:border-brass hover:bg-brass/5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brass/50"
+                    >
+                      <div className="h-32 rounded-lg border border-border bg-[#071B31]" style={{ backgroundImage: `url(/pack/ambiente/${item.assetKey})`, backgroundRepeat: 'repeat', backgroundSize: '192px 128px' }} />
                       <span className="mt-2 block text-xs font-medium text-foreground">{item.label}</span>
                     </button>
                   ))}

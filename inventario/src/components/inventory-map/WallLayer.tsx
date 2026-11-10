@@ -14,7 +14,9 @@ import { fmtMeters } from '@/features/inventory-map/lib/wallGeometry';
 type Point = [number, number];
 
 // Valores idênticos ao editor de referência (Mapa Patrimonial - Editor de Planta.dc.html).
-const GRID = 20;
+// A grade visual usa células de 20 px. Paredes aceitam meia célula para que a
+// linha central possa passar tanto na borda quanto no meio de um quadrado.
+const GRID = 10;
 const MAGNET = 22;
 const DEFAULT_THICKNESS = 15;
 const OUTER = '#4A525C';       // contorno da parede (módulo claro)
